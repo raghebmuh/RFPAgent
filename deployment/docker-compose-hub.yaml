@@ -1,4 +1,4 @@
-name: docsgpt-oss
+name: rfp-agent
 services:
 
   frontend:
@@ -23,7 +23,7 @@ services:
       - LLM_NAME=$LLM_NAME
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/1
-      - MONGO_URI=mongodb://mongo:27017/docsgpt
+      - MONGO_URI=mongodb://mongo:27017/rfpagent
       - CACHE_REDIS_URL=redis://redis:6379/2
       - OPENAI_BASE_URL=$OPENAI_BASE_URL
     ports:

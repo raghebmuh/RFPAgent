@@ -7,6 +7,7 @@ import { Agent } from './agents/types';
 import conversationService from './api/services/conversationService';
 import userService from './api/services/userService';
 import Add from './assets/add.svg';
+import Logo from './assets/logo.png';
 import Expand from './assets/expand.svg';
 import Hamburger from './assets/hamburger.svg';
 import openNewChat from './assets/openNewChat.svg';
@@ -346,8 +347,9 @@ export default function Navigation({ navOpen, setNavOpen }: NavigationProps) {
               }
             }}
           >
-            <a href="/" className="flex gap-1.5">
-              <p className="my-auto text-2xl font-semibold">RFPAgent</p>
+            <a href="/" className="flex items-center gap-2">
+              <img src={Logo} alt="rfpagent" className="h-8 w-8" />
+              <p className="text-2xl font-semibold">RFPAgent</p>
             </a>
           </div>
           <button

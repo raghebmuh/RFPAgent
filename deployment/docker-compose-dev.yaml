@@ -1,4 +1,4 @@
-name: docsgpt-oss
+name: rfp-agent
 services:
 
   redis:
