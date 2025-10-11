@@ -7,10 +7,7 @@ import { Agent } from './agents/types';
 import conversationService from './api/services/conversationService';
 import userService from './api/services/userService';
 import Add from './assets/add.svg';
-import DocsGPT3 from './assets/cute_docsgpt3.svg';
-import Discord from './assets/discord.svg';
 import Expand from './assets/expand.svg';
-import Github from './assets/git_nav.svg';
 import Hamburger from './assets/hamburger.svg';
 import openNewChat from './assets/openNewChat.svg';
 import Pin from './assets/pin.svg';
@@ -19,9 +16,7 @@ import SettingGear from './assets/settingGear.svg';
 import Spark from './assets/spark.svg';
 import SpinnerDark from './assets/spinner-dark.svg';
 import Spinner from './assets/spinner.svg';
-import Twitter from './assets/TwitterX.svg';
 import UnPin from './assets/unpin.svg';
-import Help from './components/Help';
 import {
   handleAbort,
   selectQueries,
@@ -329,7 +324,7 @@ export default function Navigation({ navOpen, setNavOpen }: NavigationProps) {
               </button>
             )}
             <div className="text-gray-4000 text-[20px] font-medium">
-              DocsGPT
+              RFPAgent
             </div>
           </div>
         </div>
@@ -352,8 +347,7 @@ export default function Navigation({ navOpen, setNavOpen }: NavigationProps) {
             }}
           >
             <a href="/" className="flex gap-1.5">
-              <img className="h-10" src={DocsGPT3} alt="DocsGPT Logo" />
-              <p className="my-auto text-2xl font-semibold">DocsGPT</p>
+              <p className="my-auto text-2xl font-semibold">RFPAgent</p>
             </a>
           </div>
           <button
@@ -555,59 +549,6 @@ export default function Navigation({ navOpen, setNavOpen }: NavigationProps) {
               </p>
             </NavLink>
           </div>
-          <div className="text-eerie-black flex flex-col justify-end dark:text-white">
-            <div className="flex items-center justify-between py-1">
-              <Help />
-
-              <div className="flex items-center gap-1 pr-4">
-                <NavLink
-                  target="_blank"
-                  to={'https://discord.gg/WHJdfbQDR4'}
-                  className={
-                    'rounded-full hover:bg-gray-100 dark:hover:bg-[#28292E]'
-                  }
-                >
-                  <img
-                    src={Discord}
-                    width={24}
-                    height={24}
-                    alt="Join Discord community"
-                    className="m-2 w-6 self-center filter dark:invert"
-                  />
-                </NavLink>
-                <NavLink
-                  target="_blank"
-                  to={'https://x.com/docsgptai'}
-                  className={
-                    'rounded-full hover:bg-gray-100 dark:hover:bg-[#28292E]'
-                  }
-                >
-                  <img
-                    src={Twitter}
-                    width={20}
-                    height={20}
-                    alt="Follow us on X"
-                    className="m-2 self-center filter dark:invert"
-                  />
-                </NavLink>
-                <NavLink
-                  target="_blank"
-                  to={'https://github.com/arc53/docsgpt'}
-                  className={
-                    'rounded-full hover:bg-gray-100 dark:hover:bg-[#28292E]'
-                  }
-                >
-                  <img
-                    src={Github}
-                    alt="View on GitHub"
-                    width={28}
-                    height={28}
-                    className="m-2 self-center filter dark:invert"
-                  />
-                </NavLink>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
       <div className="dark:border-b-purple-taupe dark:bg-chinese-black sticky z-10 h-16 w-full border-b-2 bg-gray-50 lg:hidden">
@@ -622,7 +563,7 @@ export default function Navigation({ navOpen, setNavOpen }: NavigationProps) {
               className="w-7 filter dark:invert"
             />
           </button>
-          <div className="text-gray-4000 text-[20px] font-medium">DocsGPT</div>
+          <div className="text-gray-4000 text-[20px] font-medium">RFPAgent</div>
         </div>
       </div>
       <DeleteConvModal

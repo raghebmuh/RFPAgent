@@ -3,8 +3,8 @@
   "chat": "Chat",
   "chats": "Chats",
   "newChat": "New Chat",
-  "inputPlaceholder": "How can DocsGPT help you?",
-  "tagline": "DocsGPT uses GenAI, please review critical information using sources.",
+  "inputPlaceholder": "How can RFPAgent help you?",
+  "tagline": "RFPAgent - One Platform. Zero Hassle. Complete RFPs",
   "sourceDocs": "Source",
   "none": "None",
   "cancel": "Cancel",
@@ -14,16 +14,8 @@
   "manageAgents": "Manage Agents",
   "demo": [
     {
-      "header": "Learn about DocsGPT",
-      "query": "What is DocsGPT?"
-    },
-    {
       "header": "Summarize documentation",
       "query": "Summarize current context"
-    },
-    {
-      "header": "Write Code",
-      "query": "Write code for api request to /api/answer"
     },
     {
       "header": "Learning Assistance",
@@ -228,7 +220,7 @@
   "modals": {
     "uploadDoc": {
       "label": "Upload new document",
-      "select": "Choose how to upload your document to DocsGPT",
+      "select": "Choose how to upload your document to RFPAgent",
       "selectSource": "Select the way to add your source",
       "selectedFiles": "Selected Files",
       "noFilesSelected": "No files selected",
@@ -364,9 +356,9 @@
     },
     "prompts": {
       "addPrompt": "Add Prompt",
-      "addDescription": "Add your custom prompt and save it to DocsGPT",
+      "addDescription": "Add your custom prompt and save it to RFPAgent",
       "editPrompt": "Edit Prompt",
-      "editDescription": "Edit your custom prompt and save it to DocsGPT",
+      "editDescription": "Edit your custom prompt and save it to RFPAgent",
       "promptName": "Prompt Name",
       "promptText": "Prompt Text",
       "save": "Save",
@@ -389,8 +381,8 @@
   },
   "sharedConv": {
     "subtitle": "Created with",
-    "button": "Get Started with DocsGPT",
-    "meta": "DocsGPT uses GenAI, please review critical information using sources."
+    "button": "Get Started with RFPAgent",
+    "meta": "RFPAgent - One Platform. Zero Hassle. Complete RFPs"
   },
   "convTile": {
     "share": "Share",

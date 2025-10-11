@@ -3,11 +3,11 @@ import { initReactI18next } from 'react-i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
 
 import en from './en.json'; //English
-import es from './es.json'; //Spanish
-import jp from './jp.json'; //Japanese
-import zh from './zh.json'; //Mandarin
-import zhTW from './zh-TW.json'; //Traditional Chinese
-import ru from './ru.json'; //Russian
+//Spanish
+//Japanese
+//Mandarin
+//Traditional Chinese
+//Russian
 
 i18n
   .use(LanguageDetector)
@@ -17,21 +17,21 @@ i18n
       en: {
         translation: en,
       },
-      es: {
-        translation: es,
-      },
-      jp: {
-        translation: jp,
-      },
-      zh: {
-        translation: zh,
-      },
-      zhTW: {
-        translation: zhTW,
-      },
-      ru: {
-        translation: ru,
-      },
+      // es: {
+      //   translation: es,
+      // },
+      // jp: {
+      //   translation: jp,
+      // },
+      // zh: {
+      //   translation: zh,
+      // },
+      // zhTW: {
+      //   translation: zhTW,
+      // },
+      // ru: {
+      //   translation: ru,
+      // },
     },
     fallbackLng: 'en',
     detection: {

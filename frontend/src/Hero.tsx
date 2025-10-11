@@ -1,4 +1,4 @@
-import DocsGPT3 from './assets/cute_docsgpt3.svg';
+// import DocsGPT3 from './assets/cute_docsgpt3.svg';
 import { useTranslation } from 'react-i18next';
 
 export default function Hero({
@@ -23,8 +23,8 @@ export default function Hero({
       {/* Header Section */}
       <div className="flex grow flex-col items-center justify-center pt-8 md:pt-0">
         <div className="mb-4 flex items-center">
-          <span className="text-4xl font-semibold">DocsGPT</span>
-          <img className="mb-1 inline w-14" src={DocsGPT3} alt="docsgpt" />
+          <span className="text-4xl font-semibold">RFP Agent</span>
+          {/* <img className="mb-1 inline w-14" src={DocsGPT3} alt="docsgpt" /> */}
         </div>
       </div>
 

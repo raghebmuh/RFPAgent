@@ -30,11 +30,11 @@ export default function General() {
 
   const languageOptions = [
     { label: 'English', value: 'en' },
-    { label: 'Español', value: 'es' },
-    { label: '日本語', value: 'jp' },
-    { label: '普通话', value: 'zh' },
-    { label: '繁體中文（臺灣）', value: 'zhTW' },
-    { label: 'Русский', value: 'ru' },
+    // { label: 'Español', value: 'es' },
+    // { label: '日本語', value: 'jp' },
+    // { label: '普通话', value: 'zh' },
+    // { label: '繁體中文（臺灣）', value: 'zhTW' },
+    // { label: 'Русский', value: 'ru' },
   ];
   const chunks = ['0', '2', '4', '6', '8', '10'];
   const token_limits = new Map([

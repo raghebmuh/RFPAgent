@@ -1,24 +1,24 @@
 import userService from '../api/services/userService';
 import {
   selectAgents,
-  selectTemplateAgents,
+  // selectTemplateAgents,
   selectSharedAgents,
   setAgents,
-  setTemplateAgents,
+  // setTemplateAgents,
   setSharedAgents,
 } from '../preferences/preferenceSlice';
 
 export const agentSectionsConfig = [
-  {
-    id: 'template',
-    title: 'By DocsGPT',
-    description: 'Agents provided by DocsGPT',
-    showNewAgentButton: false,
-    emptyStateDescription: 'No template agents found.',
-    fetchAgents: (token: string | null) => userService.getTemplateAgents(token),
-    selectData: selectTemplateAgents,
-    updateAction: setTemplateAgents,
-  },
+  // {
+  //   id: 'template',
+  //   title: 'By RFPAgent',
+  //   description: 'Agents provided by RFPAgent',
+  //   showNewAgentButton: false,
+  //   emptyStateDescription: 'No template agents found.',
+  //   fetchAgents: (token: string | null) => userService.getTemplateAgents(token),
+  //   selectData: selectTemplateAgents,
+  //   updateAction: setTemplateAgents,
+  // },
   {
     id: 'user',
     title: 'By me',

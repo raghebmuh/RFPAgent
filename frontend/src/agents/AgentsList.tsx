@@ -36,7 +36,7 @@ export default function AgentsList() {
         Agents
       </h1>
       <p className="dark:text-gray-4000 mt-5 text-[15px] text-[#71717A]">
-        Discover and create custom versions of DocsGPT that combine
+        Discover and create custom versions of RFPAgent that combine
         instructions, extra knowledge, and any combination of skills
       </p>
       {agentSectionsConfig.map((sectionConfig) => (
