@@ -29,3 +29,13 @@ export type MermaidRendererProps = {
   code: string;
   isLoading?: boolean;
 };
+
+export type DocumentRendererProps = {
+  docId: string;
+  title: string;
+  sections?: Array<{ heading: string; level: number }>;
+  previewText?: string;
+  isLoading?: boolean;
+  language?: string;
+  rtl?: boolean;
+};

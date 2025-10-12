@@ -37,6 +37,7 @@ users_collection = db["users"]
 user_logs_collection = db["user_logs"]
 user_tools_collection = db["user_tools"]
 attachments_collection = db["attachments"]
+user_documents_collection = db["user_documents"]
 
 
 try:

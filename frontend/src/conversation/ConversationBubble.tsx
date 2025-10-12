@@ -28,6 +28,7 @@ import Accordion from '../components/Accordion';
 import Avatar from '../components/Avatar';
 import CopyButton from '../components/CopyButton';
 import MermaidRenderer from '../components/MermaidRenderer';
+import DocumentRenderer from '../components/DocumentRenderer';
 import Sidebar from '../components/Sidebar';
 import Spinner from '../components/Spinner';
 import SpeakButton from '../components/TextToSpeechButton';
@@ -254,21 +255,42 @@ const ConversationBubble = forwardRef<
       const processedContent = preprocessLaTeX(content);
 
       const contentSegments: Array<{
-        type: 'text' | 'mermaid';
+        type: 'text' | 'mermaid' | 'document';
         content: string;
+        data?: any;
       }> = [];
 
       let lastIndex = 0;
-      const regex = /```mermaid\n([\s\S]*?)```/g;
+
+      // Combined regex for both mermaid and document blocks
+      const regex = /```(mermaid|document)\n([\s\S]*?)```/g;
       let match;
 
       while ((match = regex.exec(processedContent)) !== null) {
+        const blockType = match[1]; // 'mermaid' or 'document'
+        const blockContent = match[2].trim();
+
         const textBefore = processedContent.substring(lastIndex, match.index);
         if (textBefore) {
           contentSegments.push({ type: 'text', content: textBefore });
         }
 
-        contentSegments.push({ type: 'mermaid', content: match[1].trim() });
+        if (blockType === 'mermaid') {
+          contentSegments.push({ type: 'mermaid', content: blockContent });
+        } else if (blockType === 'document') {
+          // Parse document JSON
+          try {
+            const docData = JSON.parse(blockContent);
+            contentSegments.push({
+              type: 'document',
+              content: blockContent,
+              data: docData,
+            });
+          } catch (e) {
+            // If parsing fails, treat as text
+            contentSegments.push({ type: 'text', content: match[0] });
+          }
+        }
 
         lastIndex = match.index + match[0].length;
       }
@@ -529,7 +551,7 @@ const ConversationBubble = forwardRef<
                           >
                             {segment.content}
                           </ReactMarkdown>
-                        ) : (
+                        ) : segment.type === 'mermaid' ? (
                           <div
                             className="my-4 w-full"
                             style={{ minWidth: '100%' }}
@@ -539,7 +561,20 @@ const ConversationBubble = forwardRef<
                               isLoading={isStreaming}
                             />
                           </div>
-                        )}
+                        ) : segment.type === 'document' && segment.data ? (
+                          <div
+                            className="my-4 w-full"
+                            style={{ minWidth: '100%' }}
+                          >
+                            <DocumentRenderer
+                              docId={segment.data.doc_id}
+                              title={segment.data.title}
+                              sections={segment.data.sections}
+                              previewText={segment.data.preview_text}
+                              isLoading={isStreaming}
+                            />
+                          </div>
+                        ) : null}
                       </Fragment>
                     ))}
                   </>
