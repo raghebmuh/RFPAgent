@@ -111,7 +111,7 @@ export default function AgentDetailsModal({
                     className="absolute -mt-0.5 ml-1 inline-flex"
                   />
                 </p>
-                <a
+                {/* <a
                   href="https://docs.docsgpt.cloud/Agents/basics#core-components-of-an-agent"
                   className="text-purple-30 flex w-fit items-center gap-1 hover:underline"
                   target="_blank"
@@ -123,7 +123,7 @@ export default function AgentDetailsModal({
                     alt="External link"
                     className="h-3 w-3"
                   />
-                </a>
+                </a> */}
               </div>
             ) : (
               <button
@@ -196,7 +196,7 @@ export default function AgentDetailsModal({
                     className="absolute -mt-0.5 ml-1 inline-flex"
                   />
                 </p>
-                <a
+                {/* <a
                   href="https://docs.docsgpt.cloud/Agents/basics#core-components-of-an-agent"
                   className="text-purple-30 flex w-fit items-center gap-1 hover:underline"
                   target="_blank"
@@ -208,7 +208,7 @@ export default function AgentDetailsModal({
                     alt="External link"
                     className="h-3 w-3"
                   />
-                </a>
+                </a> */}
               </div>
             ) : (
               <button
