@@ -434,6 +434,8 @@ const ConversationBubble = forwardRef<
                   ? 'text-red-3000 dark:border-red-2000 relative flex-row items-center rounded-full border border-transparent bg-[#FFE7E7] p-2 py-5 text-sm font-normal dark:text-white'
                   : 'flex-col rounded-3xl'
               }`}
+              dir={/[\u0600-\u06FF\u0750-\u077F]/.test(message) ? 'rtl' : 'ltr'}
+              style={/[\u0600-\u06FF\u0750-\u077F]/.test(message) ? { textAlign: 'right' } : undefined}
             >
               {(() => {
                 const contentSegments = processMarkdownContent(message);
