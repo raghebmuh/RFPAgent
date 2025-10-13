@@ -158,7 +158,11 @@ const ConversationBubble = forwardRef<
             {!isEditClicked && (
               <>
                 <div className="relative mr-2 flex w-full flex-col">
-                  <div className="from-medium-purple to-slate-blue mr-2 ml-2 flex max-w-full items-start gap-2 rounded-[28px] bg-linear-to-b px-5 py-4 text-sm leading-normal break-words whitespace-pre-wrap text-white sm:text-base">
+                  <div
+                    className="from-medium-purple to-slate-blue mr-2 ml-2 flex max-w-full items-start gap-2 rounded-[28px] bg-linear-to-b px-5 py-4 text-sm leading-normal break-words whitespace-pre-wrap text-white sm:text-base"
+                    dir={/[\u0600-\u06FF\u0750-\u077F]/.test(message ?? '') ? 'rtl' : 'ltr'}
+                    style={/[\u0600-\u06FF\u0750-\u077F]/.test(message ?? '') ? { textAlign: 'right' } : undefined}
+                  >
                     <div
                       ref={messageRef}
                       className={`${isQuestionCollapsed ? 'line-clamp-4' : ''} w-full`}
@@ -214,6 +218,8 @@ const ConversationBubble = forwardRef<
                 }}
                 rows={5}
                 value={editInputBox}
+                dir={/[\u0600-\u06FF\u0750-\u077F]/.test(editInputBox) ? 'rtl' : 'ltr'}
+                style={/[\u0600-\u06FF\u0750-\u077F]/.test(editInputBox) ? { textAlign: 'right' } : undefined}
                 className="border-silver text-carbon dark:border-philippine-grey dark:bg-raisin-black dark:text-chinese-white w-full resize-none rounded-3xl border px-4 py-3 text-base leading-relaxed focus:outline-hidden"
               />
               <div className="flex items-center justify-end gap-2">
