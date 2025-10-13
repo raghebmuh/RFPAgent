@@ -34,6 +34,24 @@ class OpenAILLM(BaseLLM):
             if role == "model":
                 role = "assistant"
 
+            # Handle tool messages with tool_call_id (already in correct format)
+            if role == "tool" and "tool_call_id" in message:
+                cleaned_messages.append({
+                    "role": "tool",
+                    "tool_call_id": message["tool_call_id"],
+                    "content": content if isinstance(content, str) else json.dumps(content)
+                })
+                continue
+
+            # Handle assistant messages with tool_calls (already in correct format)
+            if role == "assistant" and "tool_calls" in message and message["tool_calls"]:
+                cleaned_messages.append({
+                    "role": "assistant",
+                    "content": content,
+                    "tool_calls": message["tool_calls"]
+                })
+                continue
+
             if role and content is not None:
                 if isinstance(content, str):
                     cleaned_messages.append({"role": role, "content": content})
@@ -167,6 +185,11 @@ class OpenAILLM(BaseLLM):
 
         if response_format:
             request_params["response_format"] = response_format
+
+        # Log the exact request being sent for debugging
+        logging.debug(f"Sending request to Ollama with {len(messages)} messages")
+        for i, msg in enumerate(messages):
+            logging.debug(f"Message {i}: role={msg.get('role')}, content_type={type(msg.get('content'))}, has_tool_calls={bool(msg.get('tool_calls'))}, has_tool_call_id={bool(msg.get('tool_call_id'))}")
 
         response = self.client.chat.completions.create(**request_params)
 
