@@ -1,9 +1,10 @@
 """
 MCP-Doc Server: FastMCP server for Word document generation
-Provides tools for creating, editing, and managing .docx files
+Provides tools for creating, editing, and managing .docx files with Arabic RFP template support
 """
 
 import os
+import sys
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -14,6 +15,16 @@ from docx.shared import Inches, Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.shared import OxmlElement, qn
 from fastmcp import FastMCP
+
+# Add application templates to path
+sys.path.insert(0, '/app/application/templates')
+try:
+    from rfp_template_ar import RFPTemplateKSA, Section as RFPSection, TableSpec
+except ImportError:
+    RFPTemplateKSA = None
+    RFPSection = None
+    TableSpec = None
+    print("Warning: Arabic RFP template not available")
 
 # Initialize FastMCP server
 mcp = FastMCP("MCP-Doc Server")
@@ -114,7 +125,10 @@ def create_arabic_rfp_document(
     date: Optional[str] = None
 ) -> dict:
     """
-    Create a new Arabic RFP (كراسة الشروط والمواصفات) document with RTL support.
+    Create a comprehensive Arabic RFP (كراسة الشروط والمواصفات) document with full KSA structure.
+
+    This function generates a complete Arabic RFP document following the Saudi Arabian Etimad platform
+    structure with 11 standard sections, proper RTL formatting, and Arabic typography.
 
     Args:
         title: The title of the RFP document (Arabic)
@@ -124,7 +138,7 @@ def create_arabic_rfp_document(
         date: Optional date (defaults to current date in Arabic)
 
     Returns:
-        dict with doc_id, title, and initial structure
+        dict with doc_id, title, and full document structure
     """
     doc_id = str(uuid.uuid4())
     doc = Document()
@@ -135,61 +149,206 @@ def create_arabic_rfp_document(
     core_properties.subject = f"كراسة الشروط والمواصفات - {project_name}"
     core_properties.author = entity_name or "RFPAgent"
 
-    # Add title with RTL support
-    title_paragraph = doc.add_heading(title, level=0)
-    title_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    set_rtl_paragraph(title_paragraph)
-    for run in title_paragraph.runs:
-        set_arabic_font(run, font_size=20)
+    # Generate full RFP structure using template
+    if RFPTemplateKSA:
+        context = {
+            "entity_name": entity_name or "[اسم الجهة]",
+            "project_name": project_name,
+            "tender_no": tender_no or "[رقم الكراسة]",
+            "date": date or datetime.now().strftime('%Y/%m/%d')
+        }
 
-    # Add document info with RTL support
-    info_paragraph = doc.add_paragraph()
-    set_rtl_paragraph(info_paragraph)
-    run = info_paragraph.add_run(f"اسم المشروع: {project_name}")
-    run.bold = True
-    set_arabic_font(run)
+        rfp_doc = RFPTemplateKSA.generate(context)
 
-    if entity_name:
-        entity_para = doc.add_paragraph(f"الجهة: {entity_name}")
-        set_rtl_paragraph(entity_para)
-        for run in entity_para.runs:
+        # Add title page with RTL support
+        title_paragraph = doc.add_heading(title, level=0)
+        title_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        set_rtl_paragraph(title_paragraph)
+        for run in title_paragraph.runs:
+            set_arabic_font(run, font_size=24)
+
+        # Add document info with RTL support
+        info_paragraph = doc.add_paragraph()
+        set_rtl_paragraph(info_paragraph)
+        run = info_paragraph.add_run(f"اسم المشروع: {project_name}")
+        run.bold = True
+        set_arabic_font(run, font_size=16)
+
+        if entity_name:
+            entity_para = doc.add_paragraph(f"الجهة: {entity_name}")
+            set_rtl_paragraph(entity_para)
+            for run in entity_para.runs:
+                set_arabic_font(run)
+
+        if tender_no:
+            tender_para = doc.add_paragraph(f"رقم الكراسة: {tender_no}")
+            set_rtl_paragraph(tender_para)
+            for run in tender_para.runs:
+                set_arabic_font(run)
+
+        date_para = doc.add_paragraph(f"التاريخ: {date or datetime.now().strftime('%Y/%m/%d')}")
+        set_rtl_paragraph(date_para)
+        for run in date_para.runs:
             set_arabic_font(run)
 
-    if tender_no:
-        tender_para = doc.add_paragraph(f"رقم الكراسة: {tender_no}")
-        set_rtl_paragraph(tender_para)
-        for run in tender_para.runs:
-            set_arabic_font(run)
+        # Add page break
+        doc.add_page_break()
 
-    date_para = doc.add_paragraph(f"التاريخ: {date or datetime.now().strftime('%Y/%m/%d')}")
-    set_rtl_paragraph(date_para)
-    for run in date_para.runs:
+        # Add all sections from template
+        sections_added = []
+        for section in rfp_doc.sections:
+            # Add section heading
+            heading_level = min(section.level, 3)  # Limit to level 3
+            heading_para = doc.add_heading(section.title, level=heading_level)
+            set_rtl_paragraph(heading_para)
+            for run in heading_para.runs:
+                set_arabic_font(run, font_size=18 if heading_level == 1 else 16)
+
+            # Add articles as bullet points
+            if section.articles:
+                for article in section.articles:
+                    para = doc.add_paragraph(article, style='List Bullet')
+                    set_rtl_paragraph(para)
+                    for run in para.runs:
+                        set_arabic_font(run, font_size=14)
+
+            # Add body content
+            if section.body:
+                body_para = doc.add_paragraph(section.body)
+                set_rtl_paragraph(body_para)
+                for run in body_para.runs:
+                    set_arabic_font(run, font_size=14)
+                doc.add_paragraph()  # Add spacing
+
+            # Add tables
+            for table_spec in section.tables:
+                if table_spec.title:
+                    table_title_para = doc.add_paragraph()
+                    run = table_title_para.add_run(table_spec.title)
+                    run.bold = True
+                    set_rtl_paragraph(table_title_para)
+                    set_arabic_font(run, font_size=14)
+
+                # Create table
+                rows = len(table_spec.rows) + 1  # +1 for header
+                cols = len(table_spec.columns)
+                if rows > 1 and cols > 0:
+                    table = doc.add_table(rows=rows, cols=cols)
+                    table.style = 'Light Grid Accent 1'
+
+                    # Add header row
+                    for j, col_name in enumerate(table_spec.columns):
+                        cell = table.rows[0].cells[j]
+                        cell.text = col_name
+                        for paragraph in cell.paragraphs:
+                            set_rtl_paragraph(paragraph)
+                            for run in paragraph.runs:
+                                run.font.bold = True
+                                set_arabic_font(run, font_size=14)
+
+                    # Add data rows
+                    for i, row_data in enumerate(table_spec.rows, 1):
+                        for j, cell_data in enumerate(row_data):
+                            cell = table.rows[i].cells[j]
+                            cell.text = str(cell_data) if cell_data else ""
+                            for paragraph in cell.paragraphs:
+                                set_rtl_paragraph(paragraph)
+                                for run in paragraph.runs:
+                                    set_arabic_font(run, font_size=13)
+
+                if table_spec.note:
+                    note_para = doc.add_paragraph(f"ملاحظة: {table_spec.note}")
+                    set_rtl_paragraph(note_para)
+                    for run in note_para.runs:
+                        run.font.italic = True
+                        set_arabic_font(run, font_size=12)
+
+                doc.add_paragraph()  # Add spacing after table
+
+            sections_added.append({
+                "code": section.code,
+                "title": section.title,
+                "level": section.level
+            })
+
+        # Store document with full metadata
+        active_documents[doc_id] = doc
+        document_metadata[doc_id] = {
+            "doc_id": doc_id,
+            "title": title,
+            "project_name": project_name,
+            "entity_name": entity_name,
+            "tender_no": tender_no,
+            "created_at": datetime.now().isoformat(),
+            "language": "ar",
+            "rtl": True,
+            "template": "KSA_Etimad",
+            "sections": sections_added
+        }
+
+        return {
+            "success": True,
+            "doc_id": doc_id,
+            "title": title,
+            "language": "ar",
+            "template": "KSA_Etimad",
+            "sections_count": len(sections_added),
+            "message": f"تم إنشاء كراسة الشروط والمواصفات الكاملة '{title}' بنجاح مع {len(sections_added)} قسم"
+        }
+
+    else:
+        # Fallback to simple document if template not available
+        title_paragraph = doc.add_heading(title, level=0)
+        title_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        set_rtl_paragraph(title_paragraph)
+        for run in title_paragraph.runs:
+            set_arabic_font(run, font_size=20)
+
+        info_paragraph = doc.add_paragraph()
+        set_rtl_paragraph(info_paragraph)
+        run = info_paragraph.add_run(f"اسم المشروع: {project_name}")
+        run.bold = True
         set_arabic_font(run)
 
-    # Add page break
-    doc.add_page_break()
+        if entity_name:
+            entity_para = doc.add_paragraph(f"الجهة: {entity_name}")
+            set_rtl_paragraph(entity_para)
+            for run in entity_para.runs:
+                set_arabic_font(run)
 
-    # Store document
-    active_documents[doc_id] = doc
-    document_metadata[doc_id] = {
-        "doc_id": doc_id,
-        "title": title,
-        "project_name": project_name,
-        "entity_name": entity_name,
-        "tender_no": tender_no,
-        "created_at": datetime.now().isoformat(),
-        "language": "ar",
-        "rtl": True,
-        "sections": []
-    }
+        if tender_no:
+            tender_para = doc.add_paragraph(f"رقم الكراسة: {tender_no}")
+            set_rtl_paragraph(tender_para)
+            for run in tender_para.runs:
+                set_arabic_font(run)
 
-    return {
-        "success": True,
-        "doc_id": doc_id,
-        "title": title,
-        "language": "ar",
-        "message": f"تم إنشاء كراسة الشروط '{title}' بنجاح"
-    }
+        date_para = doc.add_paragraph(f"التاريخ: {date or datetime.now().strftime('%Y/%m/%d')}")
+        set_rtl_paragraph(date_para)
+        for run in date_para.runs:
+            set_arabic_font(run)
+
+        doc.add_page_break()
+
+        active_documents[doc_id] = doc
+        document_metadata[doc_id] = {
+            "doc_id": doc_id,
+            "title": title,
+            "project_name": project_name,
+            "entity_name": entity_name,
+            "tender_no": tender_no,
+            "created_at": datetime.now().isoformat(),
+            "language": "ar",
+            "rtl": True,
+            "sections": []
+        }
+
+        return {
+            "success": True,
+            "doc_id": doc_id,
+            "title": title,
+            "language": "ar",
+            "message": f"تم إنشاء كراسة الشروط '{title}' بنجاح"
+        }
 
 
 @mcp.tool()

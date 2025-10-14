@@ -38,17 +38,20 @@ class OpenAILLMHandler(LLMHandler):
 
     def create_tool_message(self, tool_call: ToolCall, result: Any) -> Dict:
         """Create OpenAI-style tool message."""
+        import json
+
+        # Convert result to string if it's not already
+        if isinstance(result, str):
+            content_str = result
+        elif isinstance(result, dict):
+            content_str = json.dumps(result)
+        else:
+            content_str = str(result)
+
         return {
             "role": "tool",
-            "content": [
-                {
-                    "function_response": {
-                        "name": tool_call.name,
-                        "response": {"result": result},
-                        "call_id": tool_call.id,
-                    }
-                }
-            ],
+            "tool_call_id": tool_call.id,
+            "content": content_str,
         }
 
     def _iterate_stream(self, response: Any) -> Generator:

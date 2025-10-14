@@ -98,42 +98,109 @@ class BaseAgent(ABC):
         return {str(i): tool for i, tool in enumerate(user_tools)}
 
     def _build_tool_parameters(self, action):
+        """Build OpenAI-compatible tool parameters from action definition."""
         params = {"type": "object", "properties": {}, "required": []}
-        for param_type in ["query_params", "headers", "body", "parameters"]:
-            if param_type in action and action[param_type].get("properties"):
-                for k, v in action[param_type]["properties"].items():
-                    if v.get("filled_by_llm", True):
-                        params["properties"][k] = {
-                            key: value
-                            for key, value in v.items()
-                            if key != "filled_by_llm" and key != "value"
-                        }
 
-                        params["required"].append(k)
+        for param_type in ["query_params", "headers", "body", "parameters"]:
+            if param_type not in action:
+                continue
+
+            param_data = action[param_type]
+            if not isinstance(param_data, dict):
+                logger.warning(
+                    f"Action '{action.get('name', 'unknown')}' has non-dict {param_type}: {type(param_data)}"
+                )
+                continue
+
+            properties = param_data.get("properties")
+            if not properties or not isinstance(properties, dict):
+                continue
+
+            for k, v in properties.items():
+                if not isinstance(v, dict):
+                    logger.warning(
+                        f"Property '{k}' in action '{action.get('name', 'unknown')}' is not a dict: {type(v)}"
+                    )
+                    continue
+
+                if v.get("filled_by_llm", True):
+                    # Copy property, excluding internal fields
+                    property_schema = {
+                        key: value
+                        for key, value in v.items()
+                        if key not in ["filled_by_llm", "value"]
+                    }
+
+                    # Ensure 'type' field exists (required by OpenAI)
+                    if "type" not in property_schema:
+                        logger.warning(
+                            f"Property '{k}' in action '{action.get('name', 'unknown')}' "
+                            f"missing 'type' field. Defaulting to 'string'."
+                        )
+                        property_schema["type"] = "string"
+
+                    params["properties"][k] = property_schema
+                    params["required"].append(k)
+
         return params
 
     def _prepare_tools(self, tools_dict):
-        self.tools = [
-            {
-                "type": "function",
-                "function": {
-                    "name": f"{action['name']}_{tool_id}",
-                    "description": action["description"],
-                    "parameters": self._build_tool_parameters(action),
-                },
-            }
-            for tool_id, tool in tools_dict.items()
-            if (
-                (tool["name"] == "api_tool" and "actions" in tool.get("config", {}))
-                or (tool["name"] != "api_tool" and "actions" in tool)
-            )
-            for action in (
-                tool["config"]["actions"].values()
-                if tool["name"] == "api_tool"
-                else tool["actions"]
-            )
-            if action.get("active", True)
-        ]
+        """Prepare tools for LLM with proper validation and error handling."""
+        self.tools = []
+
+        for tool_id, tool in tools_dict.items():
+            try:
+                # Skip tools without actions
+                if tool["name"] == "api_tool" and "actions" not in tool.get("config", {}):
+                    continue
+                if tool["name"] != "api_tool" and "actions" not in tool:
+                    continue
+
+                # Get actions based on tool type
+                actions = (
+                    tool["config"]["actions"].values()
+                    if tool["name"] == "api_tool"
+                    else tool["actions"]
+                )
+
+                # Process each action
+                for action in actions:
+                    if not action.get("active", True):
+                        continue
+
+                    try:
+                        tool_schema = {
+                            "type": "function",
+                            "function": {
+                                "name": f"{action['name']}_{tool_id}",
+                                "description": action.get("description", "No description provided"),
+                                "parameters": self._build_tool_parameters(action),
+                            },
+                        }
+
+                        # Validate the schema has required fields
+                        if not tool_schema["function"]["parameters"]["properties"]:
+                            logger.warning(
+                                f"Tool action '{action['name']}' (tool_id: {tool_id}) has no properties. Skipping."
+                            )
+                            continue
+
+                        self.tools.append(tool_schema)
+
+                    except Exception as e:
+                        logger.error(
+                            f"Error preparing action '{action.get('name', 'unknown')}' "
+                            f"for tool '{tool.get('name', 'unknown')}' (id: {tool_id}): {e}",
+                            exc_info=True
+                        )
+                        continue
+
+            except Exception as e:
+                logger.error(
+                    f"Error preparing tool '{tool.get('name', 'unknown')}' (id: {tool_id}): {e}",
+                    exc_info=True
+                )
+                continue
 
     def _execute_tool_action(self, tools_dict, call):
         parser = ToolActionParser(self.llm.__class__.__name__)
@@ -327,6 +394,7 @@ class BaseAgent(ABC):
         return retrieved_data
 
     def _llm_gen(self, messages: List[Dict], log_context: Optional[LogContext] = None):
+        import json
         gen_kwargs = {"model": self.gpt_model, "messages": messages}
 
         if (
@@ -335,6 +403,10 @@ class BaseAgent(ABC):
             and self.tools
         ):
             gen_kwargs["tools"] = self.tools
+            logger.info(f"Sending {len(self.tools)} tools to LLM: {[t['function']['name'] for t in self.tools]}")
+            # Log the full tool schemas for debugging
+            for tool in self.tools:
+                logger.debug(f"Tool schema: {json.dumps(tool, indent=2)}")
 
         if (
             self.json_schema

@@ -59,6 +59,13 @@ class DownloadDocument(Resource):
             file_path = document.get("file_path")
             file_name = document.get("file_name", f"document_{doc_id[:8]}.docx")
 
+            # Check if file exists at original path or in mounted MCP documents volume
+            if file_path and not Path(file_path).exists():
+                # Try alternate path in mounted volume
+                alt_file_path = Path("/app/mcp_documents") / Path(file_path).name
+                if alt_file_path.exists():
+                    file_path = str(alt_file_path)
+
             if not file_path or not Path(file_path).exists():
                 return make_response(
                     jsonify(
