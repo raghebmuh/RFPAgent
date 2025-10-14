@@ -205,22 +205,37 @@ class LLMHandler(ABC):
                     except StopIteration as e:
                         tool_response, call_id = e.value
                         break
+                # Add assistant message with tool call in OpenAI format
+                import json
+                arguments_str = (
+                    json.dumps(call.arguments)
+                    if isinstance(call.arguments, dict)
+                    else call.arguments if isinstance(call.arguments, str)
+                    else str(call.arguments)
+                )
+
                 updated_messages.append(
                     {
                         "role": "assistant",
-                        "content": [
+                        "content": None,
+                        "tool_calls": [
                             {
-                                "function_call": {
+                                "id": call_id,
+                                "type": "function",
+                                "function": {
                                     "name": call.name,
-                                    "args": call.arguments,
-                                    "call_id": call_id,
+                                    "arguments": arguments_str,
                                 }
                             }
                         ],
                     }
                 )
 
-                updated_messages.append(self.create_tool_message(call, tool_response))
+                # Add tool response message
+                tool_msg = self.create_tool_message(call, tool_response)
+                # Ensure tool_call_id matches the call_id we used
+                tool_msg["tool_call_id"] = call_id
+                updated_messages.append(tool_msg)
             except Exception as e:
                 logger.error(f"Error executing tool: {str(e)}", exc_info=True)
                 error_call = ToolCall(

@@ -151,16 +151,17 @@ class ConversationService:
                 completion = llm.gen(
                     model=gpt_model, messages=messages_summary, max_tokens=30
                 )
-                # Ensure the completion is not empty or just whitespace
-                conversation_name = completion.strip() if completion and completion.strip() else None
+                # Clean and validate the completion
+                if completion:
+                    completion = completion.strip()
+                # Fallback to truncated question if completion is empty
+                if not completion or len(completion) < 2:
+                    completion = question[:50] if len(question) > 50 else question
+                    logger.warning(f"LLM returned empty/invalid name, using fallback: {completion}")
             except Exception as e:
-                logger.error(f"Error generating conversation name: {str(e)}")
-                conversation_name = None
-
-            # Fallback: use first 30 characters of question if name generation failed
-            if not conversation_name:
-                conversation_name = question[:30] + ("..." if len(question) > 30 else "")
-                logger.info(f"Using fallback conversation name: {conversation_name}")
+                logger.error(f"Error generating conversation name: {e}", exc_info=True)
+                # Fallback to truncated question
+                completion = question[:50] if len(question) > 50 else question
 
             conversation_data = {
                 "user": user_id,
