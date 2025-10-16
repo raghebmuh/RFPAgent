@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(docker compose:*)",
-      "Bash(del frontendpublicfavicon.ico)"
+      "Bash(del frontendpublicfavicon.ico)",
+      "Bash(findstr:*)"
     ],
     "deny": [],
     "ask": []

@@ -46,32 +46,49 @@ class DownloadDocument(Resource):
 
             user = decoded_token.get("sub")
 
-            # Get document metadata from MongoDB
+            # Try to get document metadata from MongoDB
             document = user_documents_collection.find_one(
                 {"doc_id": doc_id, "user": user}
             )
 
-            if not document:
-                return make_response(
-                    jsonify({"success": False, "error": "Document not found"}), 404
-                )
+            file_path = None
+            file_name = f"document_{doc_id[:8]}.docx"
 
-            file_path = document.get("file_path")
-            file_name = document.get("file_name", f"document_{doc_id[:8]}.docx")
+            if document:
+                # Use metadata from MongoDB if available
+                file_path = document.get("file_path")
+                file_name = document.get("file_name", file_name)
 
-            # Check if file exists at original path or in mounted MCP documents volume
-            if file_path and not Path(file_path).exists():
-                # Try alternate path in mounted volume
-                alt_file_path = Path("/app/mcp_documents") / Path(file_path).name
-                if alt_file_path.exists():
-                    file_path = str(alt_file_path)
+                # Check if file exists at original path
+                if file_path and not Path(file_path).exists():
+                    # Try alternate path in mounted volume
+                    alt_file_path = Path("/app/mcp_documents") / Path(file_path).name
+                    if alt_file_path.exists():
+                        file_path = str(alt_file_path)
+                    else:
+                        file_path = None
+
+            # If no metadata or file not found, try to find file in mounted volume by doc_id
+            if not file_path:
+                logger.info(f"No metadata found for doc_id {doc_id}, searching in mounted volume")
+                mcp_docs_dir = Path("/app/mcp_documents")
+
+                # Search for files containing the doc_id prefix (first 8 chars)
+                doc_id_prefix = doc_id[:8] if len(doc_id) >= 8 else doc_id
+                matching_files = list(mcp_docs_dir.glob(f"*{doc_id_prefix}*.docx"))
+
+                if matching_files:
+                    # Use the most recently modified file
+                    file_path = str(max(matching_files, key=lambda p: p.stat().st_mtime))
+                    file_name = Path(file_path).name
+                    logger.info(f"Found document file: {file_path}")
 
             if not file_path or not Path(file_path).exists():
                 return make_response(
                     jsonify(
                         {
                             "success": False,
-                            "error": "Document file not found on server",
+                            "error": "Document file not found. The document may not have been saved yet.",
                         }
                     ),
                     404,

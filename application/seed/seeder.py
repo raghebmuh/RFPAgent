@@ -186,12 +186,28 @@ class DatabaseSeeder:
                     self.logger.info(f"Tool already exists: {existing['_id']}")
                     tool_ids.append(existing["_id"])
                     continue
+
+                # For MCP tools, we need to instantiate with config and discover tools
+                if tool_name == "mcp_tool":
+                    self.logger.info(f"Discovering tools from MCP server: {processed_config.get('server_url', 'unknown')}")
+                    mcp_tool_instance = tool_manager.load_tool(
+                        tool_name,
+                        processed_config,
+                        user_id=self.system_user_id
+                    )
+                    mcp_tool_instance.discover_tools()
+                    actions = mcp_tool_instance.get_actions_metadata()
+                    self.logger.info(f"Discovered {len(actions)} tools from MCP server")
+                else:
+                    # For non-MCP tools, use the existing logic
+                    actions = tool_manager.tools[tool_name].get_actions_metadata()
+
                 tool_data = {
                     "user": self.system_user_id,
                     "name": tool_name,
                     "displayName": tool_config.get("display_name", tool_name),
                     "description": tool_config.get("description", ""),
-                    "actions": tool_manager.tools[tool_name].get_actions_metadata(),
+                    "actions": actions,
                     "config": processed_config,
                     "status": True,
                 }

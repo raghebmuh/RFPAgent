@@ -450,115 +450,7 @@ const ConversationBubble = forwardRef<
                     {contentSegments.map((segment, index) => (
                       <Fragment key={index}>
                         {segment.type === 'text' ? (
-                          <ReactMarkdown
-                            className="fade-in leading-normal break-words whitespace-pre-wrap"
-                            remarkPlugins={[remarkGfm, remarkMath]}
-                            rehypePlugins={[rehypeKatex]}
-                            components={{
-                              code(props) {
-                                const {
-                                  children,
-                                  className,
-                                  node,
-                                  ref,
-                                  ...rest
-                                } = props;
-                                const match = /language-(\w+)/.exec(
-                                  className || '',
-                                );
-                                const language = match ? match[1] : '';
-
-                                return match ? (
-                                  <div className="group border-light-silver dark:border-raisin-black relative overflow-hidden rounded-[14px] border">
-                                    <div className="bg-platinum dark:bg-eerie-black-2 flex items-center justify-between px-2 py-1">
-                                      <span className="text-just-black dark:text-chinese-white text-xs font-medium">
-                                        {language}
-                                      </span>
-                                      <CopyButton
-                                        textToCopy={String(children).replace(
-                                          /\n$/,
-                                          '',
-                                        )}
-                                      />
-                                    </div>
-                                    <SyntaxHighlighter
-                                      {...rest}
-                                      PreTag="div"
-                                      language={language}
-                                      style={
-                                        isDarkTheme ? vscDarkPlus : oneLight
-                                      }
-                                      className="mt-0!"
-                                      customStyle={{
-                                        margin: 0,
-                                        borderRadius: 0,
-                                        scrollbarWidth: 'thin',
-                                      }}
-                                    >
-                                      {String(children).replace(/\n$/, '')}
-                                    </SyntaxHighlighter>
-                                  </div>
-                                ) : (
-                                  <code className="dark:bg-independence dark:text-bright-gray rounded-[6px] bg-gray-200 px-[8px] py-[4px] text-xs font-normal whitespace-pre-line">
-                                    {children}
-                                  </code>
-                                );
-                              },
-                              ul({ children }) {
-                                return (
-                                  <ul
-                                    className={`list-inside list-disc pl-4 whitespace-normal ${classes.list}`}
-                                  >
-                                    {children}
-                                  </ul>
-                                );
-                              },
-                              ol({ children }) {
-                                return (
-                                  <ol
-                                    className={`list-inside list-decimal pl-4 whitespace-normal ${classes.list}`}
-                                  >
-                                    {children}
-                                  </ol>
-                                );
-                              },
-                              table({ children }) {
-                                return (
-                                  <div className="border-silver/40 dark:border-silver/40 relative overflow-x-auto rounded-lg border">
-                                    <table className="dark:text-bright-gray w-full text-left text-gray-700">
-                                      {children}
-                                    </table>
-                                  </div>
-                                );
-                              },
-                              thead({ children }) {
-                                return (
-                                  <thead className="dark:text-bright-gray bg-gray-50 text-xs text-gray-900 uppercase dark:bg-[#26272E]/50">
-                                    {children}
-                                  </thead>
-                                );
-                              },
-                              tr({ children }) {
-                                return (
-                                  <tr className="dark:border-silver/40 border-b border-gray-200 odd:bg-white even:bg-gray-50 dark:odd:bg-[#26272E] dark:even:bg-[#26272E]/50">
-                                    {children}
-                                  </tr>
-                                );
-                              },
-                              th({ children }) {
-                                return (
-                                  <th className="px-6 py-3">{children}</th>
-                                );
-                              },
-                              td({ children }) {
-                                return (
-                                  <td className="px-6 py-3">{children}</td>
-                                );
-                              },
-                            }}
-                          >
-                            {segment.content}
-                          </ReactMarkdown>
+                          <TextWithDocumentButtons content={segment.content} isDarkTheme={isDarkTheme} />
                         ) : segment.type === 'mermaid' ? (
                           <div
                             className="my-4 w-full"
@@ -741,6 +633,206 @@ function AllSources(sources: AllSourcesProps) {
     </div>
   );
 }
+// Component to detect doc_ids in text and add download buttons
+function TextWithDocumentButtons({ content, isDarkTheme }: { content: string; isDarkTheme: boolean }) {
+  // Regex to detect UUID patterns (doc_id format)
+  const uuidRegex = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi;
+  const matches = content.match(uuidRegex);
+
+  const downloadDocument = async (docId: string) => {
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_API_HOST}/api/documents/download/${docId}`,
+        {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`,
+          },
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error('Download failed');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `document_${docId.substring(0, 8)}.docx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading document:', error);
+      alert('Failed to download document. Please try again.');
+    }
+  };
+
+  // If no doc_ids found, render normal markdown
+  if (!matches || matches.length === 0) {
+    return (
+      <ReactMarkdown
+        className="fade-in leading-normal break-words whitespace-pre-wrap"
+        remarkPlugins={[remarkGfm, remarkMath]}
+        rehypePlugins={[rehypeKatex]}
+        components={{
+          code(props) {
+            const { children, className, node, ref, ...rest } = props;
+            const match = /language-(\w+)/.exec(className || '');
+            const language = match ? match[1] : '';
+
+            return match ? (
+              <div className="group border-light-silver dark:border-raisin-black relative overflow-hidden rounded-[14px] border">
+                <div className="bg-platinum dark:bg-eerie-black-2 flex items-center justify-between px-2 py-1">
+                  <span className="text-just-black dark:text-chinese-white text-xs font-medium">
+                    {language}
+                  </span>
+                  <CopyButton
+                    textToCopy={String(children).replace(/\n$/, '')}
+                  />
+                </div>
+                <SyntaxHighlighter
+                  {...rest}
+                  PreTag="div"
+                  language={language}
+                  style={isDarkTheme ? vscDarkPlus : oneLight}
+                  className="mt-0!"
+                  customStyle={{
+                    margin: 0,
+                    borderRadius: 0,
+                    scrollbarWidth: 'thin',
+                  }}
+                >
+                  {String(children).replace(/\n$/, '')}
+                </SyntaxHighlighter>
+              </div>
+            ) : (
+              <code className="dark:bg-independence dark:text-bright-gray rounded-[6px] bg-gray-200 px-[8px] py-[4px] text-xs font-normal whitespace-pre-line">
+                {children}
+              </code>
+            );
+          },
+          ul({ children }) {
+            return (
+              <ul className={`list-inside list-disc pl-4 whitespace-normal ${classes.list}`}>
+                {children}
+              </ul>
+            );
+          },
+          ol({ children }) {
+            return (
+              <ol className={`list-inside list-decimal pl-4 whitespace-normal ${classes.list}`}>
+                {children}
+              </ol>
+            );
+          },
+          table({ children }) {
+            return (
+              <div className="border-silver/40 dark:border-silver/40 relative overflow-x-auto rounded-lg border">
+                <table className="dark:text-bright-gray w-full text-left text-gray-700">
+                  {children}
+                </table>
+              </div>
+            );
+          },
+          thead({ children }) {
+            return (
+              <thead className="dark:text-bright-gray bg-gray-50 text-xs text-gray-900 uppercase dark:bg-[#26272E]/50">
+                {children}
+              </thead>
+            );
+          },
+          tr({ children }) {
+            return (
+              <tr className="dark:border-silver/40 border-b border-gray-200 odd:bg-white even:bg-gray-50 dark:odd:bg-[#26272E] dark:even:bg-[#26272E]/50">
+                {children}
+              </tr>
+            );
+          },
+          th({ children }) {
+            return <th className="px-6 py-3">{children}</th>;
+          },
+          td({ children }) {
+            return <td className="px-6 py-3">{children}</td>;
+          },
+        }}
+      >
+        {content}
+      </ReactMarkdown>
+    );
+  }
+
+  // Split content by doc_ids and insert download buttons
+  const parts: JSX.Element[] = [];
+  let lastIndex = 0;
+
+  content.replace(uuidRegex, (match, offset) => {
+    // Add text before the doc_id
+    if (offset > lastIndex) {
+      parts.push(
+        <ReactMarkdown
+          key={`text-${offset}`}
+          className="fade-in inline leading-normal break-words whitespace-pre-wrap"
+          remarkPlugins={[remarkGfm, remarkMath]}
+          rehypePlugins={[rehypeKatex]}
+        >
+          {content.substring(lastIndex, offset)}
+        </ReactMarkdown>,
+      );
+    }
+
+    // Add the doc_id with download button
+    parts.push(
+      <span key={`docid-${offset}`} className="inline-flex items-center gap-2 mx-1">
+        <code className="dark:bg-independence dark:text-bright-gray rounded-[6px] bg-gray-200 px-[8px] py-[4px] text-xs font-mono">
+          {match}
+        </code>
+        <button
+          onClick={() => downloadDocument(match)}
+          className="inline-flex items-center gap-1 rounded-full bg-blue-600 hover:bg-blue-700 px-3 py-1 text-xs font-medium text-white transition-colors"
+          title="Download document"
+        >
+          <svg
+            className="h-3 w-3"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+            />
+          </svg>
+          Download
+        </button>
+      </span>,
+    );
+
+    lastIndex = offset + match.length;
+    return match;
+  });
+
+  // Add remaining text
+  if (lastIndex < content.length) {
+    parts.push(
+      <ReactMarkdown
+        key={`text-end`}
+        className="fade-in inline leading-normal break-words whitespace-pre-wrap"
+        remarkPlugins={[remarkGfm, remarkMath]}
+        rehypePlugins={[rehypeKatex]}
+      >
+        {content.substring(lastIndex)}
+      </ReactMarkdown>,
+    );
+  }
+
+  return <div className="fade-in leading-normal break-words whitespace-pre-wrap">{parts}</div>;
+}
+
 export default ConversationBubble;
 
 function ToolCalls({ toolCalls }: { toolCalls: ToolCallsType[] }) {
