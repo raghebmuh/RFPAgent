@@ -146,14 +146,26 @@ class ConversationService:
                 },
             ]
 
-            completion = llm.gen(
-                model=gpt_model, messages=messages_summary, max_tokens=30
-            )
+            # Generate conversation name with error handling and fallback
+            try:
+                completion = llm.gen(
+                    model=gpt_model, messages=messages_summary, max_tokens=30
+                )
+                # Ensure the completion is not empty or just whitespace
+                conversation_name = completion.strip() if completion and completion.strip() else None
+            except Exception as e:
+                logger.error(f"Error generating conversation name: {str(e)}")
+                conversation_name = None
+
+            # Fallback: use first 30 characters of question if name generation failed
+            if not conversation_name:
+                conversation_name = question[:30] + ("..." if len(question) > 30 else "")
+                logger.info(f"Using fallback conversation name: {conversation_name}")
 
             conversation_data = {
                 "user": user_id,
                 "date": current_time,
-                "name": completion,
+                "name": conversation_name,
                 "queries": [
                     {
                         "prompt": question,
