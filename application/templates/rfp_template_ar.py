@@ -3,6 +3,17 @@ RFP Template System (Arabic / KSA Etimad-style)
 Provides standard Arabic RFP (كراسة الشروط والمواصفات) structure, tables, and content scaffolds
 aligned with common sections used by Saudi government entities (Etimad platform forms).
 
+IMPORTANT: This template provides the STRUCTURE and FRAMEWORK for RFP documents.
+The actual CONTENT should be enriched by:
+1. Analyzing reference RFP documents (located in application/templates/RFPs/)
+2. Using context-specific information from the user
+3. Following writing style and terminology patterns from reference documents
+
+The MCP-doc server now provides tools to:
+- list_reference_rfps: View available reference documents
+- extract_reference_rfp_content: Read content from reference RFPs
+- analyze_reference_rfp_style: Understand writing patterns and terminology
+
 Notes:
 - Headings, subheadings, and table schemas mirror typical sections: المقدمة، الأحكام العامة، إعداد العروض،
   تسليم العروض، تقييم العروض، متطلبات التعاقد، نطاق العمل، المواصفات، المحتوى المحلي، الشروط الخاصة، الملحقات.
@@ -76,6 +87,48 @@ class RFPTemplateKSA:
     # Default table schemas (placeholders)
     # ---------------------------------
     TABLES = {
+        "basic_info": TableSpec(
+            title="المعلومات الأساسية",
+            columns=["البند", "التفاصيل"],
+            rows=[
+                ["اسم المنافسة", "[اسم المنافسة]"],
+                ["نوع المنافسة", "[نوع المنافسة - عامة/محدودة/محلية]"],
+                ["رقم المنافسة", "[رقم المنافسة]"],
+                ["قيمة وثائق المنافسة", "[القيمة - مجاناً أو بمبلغ محدد]"],
+                ["مدة توفر وثائق المنافسة", "[المدة بالأيام]"],
+                ["تاريخ بدء تقديم العروض", "[التاريخ والوقت]"],
+                ["تاريخ إغلاق تقديم العروض", "[التاريخ والوقت]"],
+                ["موعد فتح المظاريف", "[التاريخ والوقت]"],
+                ["مدة صلاحية العروض", "[عدد الأيام من تاريخ الإغلاق]"],
+                ["الفترة التعاقدية", "[المدة بالأشهر أو السنوات]"],
+                ["آخر موعد للاستفسارات", "[التاريخ والوقت]"],
+            ],
+            note="يتم تحديث هذه المعلومات وفقاً لمنصة اعتماد",
+        ),
+        "addresses_dates": TableSpec(
+            title="العناوين والمواعيد التفصيلية",
+            columns=["البند", "التفاصيل"],
+            rows=[
+                ["نسبة الضمان الابتدائي", "[النسبة المئوية - مثال: 1% من قيمة العرض]"],
+                ["نسبة الضمان النهائي", "[النسبة المئوية - مثال: 5% من قيمة العقد]"],
+                ["فترة التوقف", "[عدد الأيام - مثال: 5 أيام عمل]"],
+                ["مدة سريان الضمان النهائي", "[المدة - مثال: حتى نهاية فترة الضمان]"],
+                ["عنوان الجهة", "[العنوان الكامل]"],
+                ["مكان تسليم العروض", "[عبر منصة اعتماد الإلكترونية]"],
+                ["وقت تسليم العروض", "[حسب توقيت منصة اعتماد]"],
+                ["جهة الاتصال", "[اسم القسم - رقم الهاتف - البريد الإلكتروني]"],
+            ],
+        ),
+        "classification": TableSpec(
+            title="التصنيف وموقع التنفيذ",
+            columns=["البند", "التفاصيل"],
+            rows=[
+                ["تصنيف المشروع", "[مثال: خدمات تقنية معلومات - استشارات - توريد]"],
+                ["التصنيف الفرعي", "[التصنيف التفصيلي]"],
+                ["موقع التنفيذ", "[المدينة - المنطقة - العنوان التفصيلي]"],
+                ["نطاق التغطية", "[محلي - إقليمي - وطني]"],
+            ],
+        ),
         "key_dates": TableSpec(
             title="المواعيد المتعلقة بالمنافسة",
             columns=["المرحلة", "التاريخ", "الوقت", "ملاحظات"],
@@ -140,6 +193,81 @@ class RFPTemplateKSA:
         project = ctx.get("project_name", "[اسم المنافسة]")
         tender_no = ctx.get("tender_no", "[رقم الكراسة]")
         contact = ctx.get("contact", {"dept": "[اسم الإدارة]", "email": "[البريد الإلكتروني]", "phone": "[الهاتف]"})
+
+        # New preliminary sections matching reference PDF structure
+
+        صفحة_الغلاف = Section(
+            code="COVER",
+            title="صفحة الغلاف",
+            level=1,
+            body=(
+                f"كراسة الشروط والمواصفات\n"
+                f"وثيقة المنافسة رقم: {tender_no}\n\n"
+                f"{project}\n\n"
+                f"{entity}\n\n"
+                "[يمكن إضافة شعار الجهة هنا]"
+            ),
+        )
+
+        ملاحظات_هامة = Section(
+            code="NOTES",
+            title="ملاحظات هامة",
+            level=1,
+            articles=[
+                "يجب على المتنافسين قراءة جميع بنود وشروط هذه الوثيقة بعناية",
+                "أي عرض لا يستوفي المتطلبات الإلزامية سيتم استبعاده",
+                "تقدم العروض عبر منصة اعتماد الإلكترونية فقط",
+                "لا يحق للمتنافس المطالبة بأي تعويض عن تكاليف إعداد العرض",
+                "تحتفظ الجهة بحق إلغاء المنافسة أو تأجيلها دون إبداء الأسباب",
+                "جميع المواعيد المذكورة هي حسب توقيت المملكة العربية السعودية",
+            ],
+            body=(
+                "تم إعداد هذه الوثيقة وفقاً لنظام المنافسات والمشتريات الحكومية ولائحته التنفيذية."
+            ),
+        )
+
+        معلومات_اساسية = Section(
+            code="5-1",
+            title="القسم 5-1: المعلومات الأساسية",
+            level=1,
+            body="يوضح هذا القسم المعلومات الأساسية الخاصة بالمنافسة:",
+            tables=[RFPTemplateKSA._clone_table("basic_info")],
+        )
+
+        عناوين_مواعيد = Section(
+            code="5-2",
+            title="القسم 5-2: العناوين والمواعيد التفصيلية",
+            level=1,
+            body="يوضح هذا القسم تفاصيل الضمانات والعناوين وجهات الاتصال:",
+            tables=[RFPTemplateKSA._clone_table("addresses_dates")],
+        )
+
+        تصنيف_موقع = Section(
+            code="5-3",
+            title="القسم 5-3: التصنيف وموقع التنفيذ",
+            level=1,
+            body="يوضح هذا القسم تصنيف المشروع وموقع التنفيذ:",
+            tables=[RFPTemplateKSA._clone_table("classification")],
+        )
+
+        جدول_الكميات_التفصيلي = Section(
+            code="5-4",
+            title="القسم 5-4: جدول الكميات",
+            level=1,
+            body=(
+                "يتضمن هذا القسم جدول الكميات والأسعار التفصيلي.\n"
+                "يجب على المتنافسين تعبئة الأسعار في المنصة الإلكترونية."
+            ),
+            tables=[RFPTemplateKSA._clone_table("boq")],
+        )
+
+        # Section 5-5: The main 11 sections (existing sections)
+        ملفات_المنافسة = Section(
+            code="5-5",
+            title="القسم 5-5: ملفات المنافسة",
+            level=1,
+            body="يتضمن هذا القسم الملفات والوثائق التفصيلية للمنافسة (11 قسماً):",
+        )
 
         مقدمة = Section(
             code="S1",
@@ -319,7 +447,8 @@ class RFPTemplateKSA:
             ),
         )
 
-        return [
+        # Make the 11 main sections children of Section 5-5
+        ملفات_المنافسة.children = [
             مقدمة,
             احكام_عامة,
             اعداد_العروض,
@@ -331,6 +460,16 @@ class RFPTemplateKSA:
             المحتوى_المحلي,
             الشروط_الخاصة,
             الملحقات,
+        ]
+
+        return [
+            صفحة_الغلاف,
+            ملاحظات_هامة,
+            معلومات_اساسية,
+            عناوين_مواعيد,
+            تصنيف_موقع,
+            جدول_الكميات_التفصيلي,
+            ملفات_المنافسة,
         ]
 
     # ---------------------------------
@@ -359,8 +498,10 @@ class RFPTemplateKSA:
         lines.append(f"**الجهة**: {m.get('entity_name')}  ")
         lines.append(f"**رقم الكراسة**: {m.get('tender_no')}  ")
         lines.append("")
-        for s in doc.sections:
-            h = "#" * s.level
+
+        def render_section(s: Section, depth: int = 0):
+            """Recursively render a section and its children"""
+            h = "#" * max(1, s.level + depth)
             lines.append(f"{h} {s.title}")
             if s.articles:
                 lines.append("\n".join([f"- {a}" for a in s.articles]))
@@ -381,6 +522,14 @@ class RFPTemplateKSA:
                         lines.append("|" + "|".join(row) + "|")
                 if t.note:
                     lines.append(f"\n> ملاحظة: {t.note}\n")
+            # Render children sections
+            if s.children:
+                for child in s.children:
+                    render_section(child, depth + 1)
+
+        for s in doc.sections:
+            render_section(s)
+
         return "\n".join(lines)
 
     # ---------------------------------

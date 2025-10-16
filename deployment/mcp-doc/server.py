@@ -108,12 +108,183 @@ def create_rfp_document(
         "sections": []
     }
 
+    # AUTO-SAVE: Save document to disk immediately after creation
+    safe_title = "".join(c if c.isalnum() or c in (' ', '-', '_') else '_' for c in title)
+    safe_title = safe_title.replace(' ', '_')
+    file_name = f"{safe_title}_{doc_id[:8]}.docx"
+    file_path = DOCUMENTS_DIR / file_name
+    doc.save(str(file_path))
+
+    # Update metadata with file information
+    document_metadata[doc_id]["file_path"] = str(file_path)
+    document_metadata[doc_id]["file_name"] = file_name
+    document_metadata[doc_id]["saved_at"] = datetime.now().isoformat()
+
     return {
         "success": True,
         "doc_id": doc_id,
         "title": title,
-        "message": f"RFP document '{title}' created successfully"
+        "file_path": str(file_path),
+        "file_name": file_name,
+        "message": f"RFP document '{title}' created and saved successfully"
     }
+
+
+@mcp.tool()
+def create_rfp_from_template(
+    template_name: str,
+    title: str,
+    project_name: str,
+    entity_name: Optional[str] = None,
+    tender_no: Optional[str] = None,
+    project_description: Optional[str] = None,
+    scope_of_work: Optional[str] = None,
+    budget: Optional[str] = None,
+    duration: Optional[str] = None,
+    date: Optional[str] = None
+) -> dict:
+    """
+    Create an RFP document by loading and filling a reference template document.
+
+    This tool loads an existing reference RFP .docx file, fills in the user's
+    project details, and saves it as a new document.
+
+    Args:
+        template_name: Name of the reference RFP file to use as template (e.g., "كراسة تطبيق أتمتة خدمات تقنية المعلومات للمركز (المرحلة الأولى).docx")
+        title: The title for the new RFP document
+        project_name: Name of the project
+        entity_name: Optional name of the government entity
+        tender_no: Optional tender/RFP number
+        project_description: Optional detailed project description
+        scope_of_work: Optional scope of work details
+        budget: Optional budget information
+        duration: Optional project duration
+        date: Optional date (defaults to current date)
+
+    Returns:
+        dict with doc_id, title, file_path, and success status
+    """
+    doc_id = str(uuid.uuid4())
+    reference_dir = Path("/app/application/templates/RFPs")
+    template_path = reference_dir / template_name
+
+    if not template_path.exists():
+        return {
+            "success": False,
+            "error": f"Template file '{template_name}' not found in templates directory"
+        }
+
+    if template_path.suffix.lower() not in ['.docx']:
+        return {
+            "success": False,
+            "error": "Only .docx templates are supported"
+        }
+
+    try:
+        from docx import Document as DocxDocument
+
+        # Load the template document
+        doc = DocxDocument(str(template_path))
+
+        # Create a mapping of placeholders to replacement values
+        replacements = {
+            "[اسم المشروع]": project_name,
+            "[اسم المنافسة]": project_name,
+            "[اسم الجهة]": entity_name or "[اسم الجهة]",
+            "[الجهة الحكومية]": entity_name or "[اسم الجهة]",
+            "[رقم الكراسة]": tender_no or "[رقم الكراسة]",
+            "[رقم المنافسة]": tender_no or "[رقم الكراسة]",
+            "[التاريخ]": date or datetime.now().strftime('%Y/%m/%d'),
+            "[وصف المشروع]": project_description or "[وصف المشروع]",
+            "[نطاق العمل]": scope_of_work or "[نطاق العمل]",
+            "[الميزانية]": budget or "[الميزانية]",
+            "[المدة]": duration or "[المدة]",
+        }
+
+        # Replace text in all paragraphs
+        for paragraph in doc.paragraphs:
+            for placeholder, replacement in replacements.items():
+                if placeholder in paragraph.text:
+                    # Replace in inline text
+                    for run in paragraph.runs:
+                        if placeholder in run.text:
+                            run.text = run.text.replace(placeholder, replacement)
+
+        # Replace text in all tables
+        for table in doc.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    for paragraph in cell.paragraphs:
+                        for placeholder, replacement in replacements.items():
+                            if placeholder in paragraph.text:
+                                for run in paragraph.runs:
+                                    if placeholder in run.text:
+                                        run.text = run.text.replace(placeholder, replacement)
+
+        # Update document properties
+        core_properties = doc.core_properties
+        core_properties.title = title
+        core_properties.subject = f"كراسة الشروط والمواصفات - {project_name}"
+        core_properties.author = entity_name or "RFPAgent"
+
+        # Store document in memory
+        active_documents[doc_id] = doc
+
+        # Extract sections for metadata (simplified - just count paragraphs with heading styles)
+        sections = []
+        for i, paragraph in enumerate(doc.paragraphs):
+            if paragraph.style.name.startswith('Heading'):
+                level = int(paragraph.style.name.split()[-1]) if paragraph.style.name.split()[-1].isdigit() else 1
+                sections.append({
+                    "code": f"S{i}",
+                    "title": paragraph.text,
+                    "heading": paragraph.text,
+                    "level": level
+                })
+
+        # Save metadata
+        document_metadata[doc_id] = {
+            "doc_id": doc_id,
+            "title": title,
+            "project_name": project_name,
+            "entity_name": entity_name,
+            "tender_no": tender_no,
+            "created_at": datetime.now().isoformat(),
+            "language": "ar",
+            "rtl": True,
+            "template_used": template_name,
+            "sections": sections[:50]  # Limit to first 50 sections
+        }
+
+        # AUTO-SAVE: Save document to disk immediately
+        safe_title = "".join(c if c.isalnum() or c in (' ', '-', '_') else '_' for c in title)
+        safe_title = safe_title.replace(' ', '_')
+        file_name = f"{safe_title}_{doc_id[:8]}.docx"
+        file_path = DOCUMENTS_DIR / file_name
+        doc.save(str(file_path))
+
+        # Update metadata with file information
+        document_metadata[doc_id]["file_path"] = str(file_path)
+        document_metadata[doc_id]["file_name"] = file_name
+        document_metadata[doc_id]["saved_at"] = datetime.now().isoformat()
+
+        return {
+            "success": True,
+            "doc_id": doc_id,
+            "title": title,
+            "file_path": str(file_path),
+            "file_name": file_name,
+            "template_used": template_name,
+            "sections_count": len(sections),
+            "message": f"تم إنشاء كراسة الشروط '{title}' بنجاح من القالب '{template_name}' وحفظها تلقائياً"
+        }
+
+    except Exception as e:
+        logger.error(f"Error creating RFP from template: {e}", exc_info=True)
+        return {
+            "success": False,
+            "error": f"Failed to create RFP from template: {str(e)}"
+        }
 
 
 @mcp.tool()
@@ -194,11 +365,11 @@ def create_arabic_rfp_document(
         # Add page break
         doc.add_page_break()
 
-        # Add all sections from template
-        sections_added = []
-        for section in rfp_doc.sections:
+        # Helper function to recursively process sections and their children
+        def process_section(section, parent_level=0):
+            """Recursively process a section and all its children"""
             # Add section heading
-            heading_level = min(section.level, 3)  # Limit to level 3
+            heading_level = min(section.level + parent_level, 3)  # Limit to level 3
             heading_para = doc.add_heading(section.title, level=heading_level)
             set_rtl_paragraph(heading_para)
             for run in heading_para.runs:
@@ -265,11 +436,22 @@ def create_arabic_rfp_document(
 
                 doc.add_paragraph()  # Add spacing after table
 
+            # Record section in metadata
             sections_added.append({
                 "code": section.code,
                 "title": section.title,
                 "level": section.level
             })
+
+            # Recursively process child sections
+            if hasattr(section, 'children') and section.children:
+                for child_section in section.children:
+                    process_section(child_section, parent_level=heading_level)
+
+        # Add all sections from template (with recursive processing)
+        sections_added = []
+        for section in rfp_doc.sections:
+            process_section(section)
 
         # Store document with full metadata
         active_documents[doc_id] = doc
@@ -286,6 +468,18 @@ def create_arabic_rfp_document(
             "sections": sections_added
         }
 
+        # AUTO-SAVE: Save document to disk immediately after creation
+        safe_title = "".join(c if c.isalnum() or c in (' ', '-', '_') else '_' for c in title)
+        safe_title = safe_title.replace(' ', '_')
+        file_name = f"{safe_title}_{doc_id[:8]}.docx"
+        file_path = DOCUMENTS_DIR / file_name
+        doc.save(str(file_path))
+
+        # Update metadata with file information
+        document_metadata[doc_id]["file_path"] = str(file_path)
+        document_metadata[doc_id]["file_name"] = file_name
+        document_metadata[doc_id]["saved_at"] = datetime.now().isoformat()
+
         return {
             "success": True,
             "doc_id": doc_id,
@@ -293,7 +487,9 @@ def create_arabic_rfp_document(
             "language": "ar",
             "template": "KSA_Etimad",
             "sections_count": len(sections_added),
-            "message": f"تم إنشاء كراسة الشروط والمواصفات الكاملة '{title}' بنجاح مع {len(sections_added)} قسم"
+            "file_path": str(file_path),
+            "file_name": file_name,
+            "message": f"تم إنشاء كراسة الشروط والمواصفات الكاملة '{title}' بنجاح مع {len(sections_added)} قسم وحفظها تلقائياً"
         }
 
     else:
@@ -342,12 +538,26 @@ def create_arabic_rfp_document(
             "sections": []
         }
 
+        # AUTO-SAVE: Save document to disk immediately after creation
+        safe_title = "".join(c if c.isalnum() or c in (' ', '-', '_') else '_' for c in title)
+        safe_title = safe_title.replace(' ', '_')
+        file_name = f"{safe_title}_{doc_id[:8]}.docx"
+        file_path = DOCUMENTS_DIR / file_name
+        doc.save(str(file_path))
+
+        # Update metadata with file information
+        document_metadata[doc_id]["file_path"] = str(file_path)
+        document_metadata[doc_id]["file_name"] = file_name
+        document_metadata[doc_id]["saved_at"] = datetime.now().isoformat()
+
         return {
             "success": True,
             "doc_id": doc_id,
             "title": title,
             "language": "ar",
-            "message": f"تم إنشاء كراسة الشروط '{title}' بنجاح"
+            "file_path": str(file_path),
+            "file_name": file_name,
+            "message": f"تم إنشاء كراسة الشروط '{title}' بنجاح وحفظها تلقائياً"
         }
 
 
@@ -559,7 +769,11 @@ def get_document_preview(doc_id: str) -> dict:
 
     for i, section in enumerate(metadata.get("sections", []), 1):
         indent = "  " * (section.get("level", 1) - 1)
-        preview_lines.append(f"{indent}{i}. {section['heading']}")
+        # Support both 'heading' (from add_section) and 'title' (from create_arabic_rfp_document)
+        # Normalize to 'heading' for frontend consistency
+        section_title = section.get('heading', section.get('title', 'Untitled'))
+        section['heading'] = section_title  # Ensure 'heading' field exists for frontend
+        preview_lines.append(f"{indent}{i}. {section_title}")
 
     preview["preview_text"] = "\n".join(preview_lines)
 
@@ -619,6 +833,224 @@ def delete_document(doc_id: str) -> dict:
         "success": True,
         "doc_id": doc_id,
         "message": "Document deleted successfully"
+    }
+
+
+@mcp.tool()
+def list_reference_rfps() -> dict:
+    """
+    List all reference RFP documents available in the templates directory.
+
+    These reference documents are examples of actual Saudi government RFPs
+    that can be analyzed to understand structure, style, and content patterns.
+
+    Returns:
+        dict with list of available reference RFP files
+    """
+    reference_dir = Path("/app/application/templates/RFPs")
+
+    if not reference_dir.exists():
+        return {
+            "success": False,
+            "error": "Reference RFPs directory not found"
+        }
+
+    reference_files = []
+    for file_path in reference_dir.glob("*"):
+        if file_path.is_file() and file_path.suffix.lower() in ['.pdf', '.docx', '.doc']:
+            reference_files.append({
+                "name": file_path.name,
+                "path": str(file_path),
+                "type": file_path.suffix.lower(),
+                "size_mb": round(file_path.stat().st_size / (1024 * 1024), 2)
+            })
+
+    return {
+        "success": True,
+        "count": len(reference_files),
+        "reference_rfps": reference_files,
+        "message": f"Found {len(reference_files)} reference RFP documents"
+    }
+
+
+@mcp.tool()
+def extract_reference_rfp_content(file_name: str, max_paragraphs: int = 100) -> dict:
+    """
+    Extract text content from a reference RFP document (DOCX only for now).
+
+    This tool allows the agent to read and analyze reference RFP documents
+    to understand their structure, style, sections, and content patterns.
+
+    Args:
+        file_name: Name of the reference RFP file to extract
+        max_paragraphs: Maximum number of paragraphs to extract (default 100)
+
+    Returns:
+        dict with extracted content, structure analysis, and sections
+    """
+    reference_dir = Path("/app/application/templates/RFPs")
+    file_path = reference_dir / file_name
+
+    if not file_path.exists():
+        return {
+            "success": False,
+            "error": f"Reference RFP file '{file_name}' not found"
+        }
+
+    if file_path.suffix.lower() not in ['.docx']:
+        return {
+            "success": False,
+            "error": "Currently only DOCX files are supported for content extraction. PDF support coming soon."
+        }
+
+    try:
+        from docx import Document as DocxDocument
+
+        doc = DocxDocument(str(file_path))
+
+        # Extract paragraphs
+        paragraphs = []
+        sections = []
+        current_section = None
+
+        for i, para in enumerate(doc.paragraphs):
+            if i >= max_paragraphs:
+                break
+
+            text = para.text.strip()
+            if not text:
+                continue
+
+            # Detect section headings (heuristic: short paragraphs with Arabic keywords)
+            is_heading = False
+            if len(text) < 150 and any(keyword in text for keyword in ["القسم", "الباب", "الفصل", "المادة"]):
+                is_heading = True
+                current_section = {
+                    "heading": text,
+                    "paragraph_index": i,
+                    "content": []
+                }
+                sections.append(current_section)
+
+            paragraphs.append({
+                "index": i,
+                "text": text,
+                "is_heading": is_heading,
+                "length": len(text)
+            })
+
+            if current_section and not is_heading:
+                current_section["content"].append(text)
+
+        # Extract tables
+        tables_info = []
+        for i, table in enumerate(doc.tables):
+            if i >= 10:  # Limit to first 10 tables
+                break
+
+            rows = len(table.rows)
+            cols = len(table.columns) if rows > 0 else 0
+
+            # Extract header row if exists
+            header = []
+            if rows > 0:
+                header = [cell.text.strip() for cell in table.rows[0].cells]
+
+            tables_info.append({
+                "table_index": i,
+                "rows": rows,
+                "columns": cols,
+                "header": header[:5]  # First 5 columns only
+            })
+
+        # Analyze document structure
+        total_paragraphs = len(doc.paragraphs)
+        total_tables = len(doc.tables)
+
+        return {
+            "success": True,
+            "file_name": file_name,
+            "structure": {
+                "total_paragraphs": total_paragraphs,
+                "extracted_paragraphs": len(paragraphs),
+                "total_tables": total_tables,
+                "detected_sections": len(sections)
+            },
+            "sections": sections[:20],  # First 20 sections
+            "paragraphs": paragraphs[:50],  # First 50 paragraphs for context
+            "tables": tables_info,
+            "message": f"Extracted content from '{file_name}' - {len(sections)} sections, {len(paragraphs)} paragraphs, {len(tables_info)} tables"
+        }
+
+    except Exception as e:
+        logger.error(f"Error extracting reference RFP content: {e}", exc_info=True)
+        return {
+            "success": False,
+            "error": f"Failed to extract content: {str(e)}"
+        }
+
+
+@mcp.tool()
+def analyze_reference_rfp_style(file_name: str) -> dict:
+    """
+    Analyze the writing style, tone, and patterns in a reference RFP document.
+
+    This tool helps the agent understand how to write RFPs in a similar style
+    by analyzing terminology, sentence structure, and content patterns.
+
+    Args:
+        file_name: Name of the reference RFP file to analyze
+
+    Returns:
+        dict with style analysis, common terms, and writing patterns
+    """
+    # First extract content
+    content_result = extract_reference_rfp_content(file_name, max_paragraphs=50)
+
+    if not content_result.get("success"):
+        return content_result
+
+    paragraphs = content_result.get("paragraphs", [])
+    sections = content_result.get("sections", [])
+
+    # Analyze common terms (simple frequency analysis)
+    from collections import Counter
+
+    all_text = " ".join([p["text"] for p in paragraphs])
+    words = all_text.split()
+
+    # Find common Arabic terms (simple heuristic)
+    arabic_terms = [w for w in words if any('\u0600' <= c <= '\u06FF' for c in w)]
+    common_terms = Counter(arabic_terms).most_common(30)
+
+    # Analyze sentence patterns
+    avg_paragraph_length = sum(p["length"] for p in paragraphs) / len(paragraphs) if paragraphs else 0
+
+    # Detect tone indicators
+    formal_indicators = ["يجب", "ينبغي", "يلتزم", "وفقاً", "حسب", "بموجب"]
+    formal_count = sum(all_text.count(term) for term in formal_indicators)
+
+    return {
+        "success": True,
+        "file_name": file_name,
+        "style_analysis": {
+            "avg_paragraph_length": round(avg_paragraph_length, 2),
+            "total_words": len(words),
+            "arabic_words": len(arabic_terms),
+            "formality_score": formal_count,
+            "tone": "formal" if formal_count > 10 else "moderate"
+        },
+        "common_terms": [{"term": term, "frequency": freq} for term, freq in common_terms[:15]],
+        "section_patterns": [
+            {"heading": s["heading"], "content_paragraphs": len(s["content"])}
+            for s in sections[:10]
+        ],
+        "writing_patterns": {
+            "uses_numbered_lists": "1." in all_text or "٠" in all_text,
+            "uses_bullet_points": "•" in all_text or "-" in all_text,
+            "includes_tables": len(content_result.get("tables", [])) > 0
+        },
+        "message": f"Analyzed writing style of '{file_name}'"
     }
 
 

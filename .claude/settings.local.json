@@ -3,7 +3,7 @@
     "allow": [
       "Bash(docker compose:*)",
       "Bash(del frontendpublicfavicon.ico)",
-      "Bash(dir \"D:\\_Tec Solution\\AI Agents\\RFPAgent\\inputs\\templates\"\" /b)"
+      "Bash(findstr:*)"
     ],
     "deny": [],
     "ask": []
