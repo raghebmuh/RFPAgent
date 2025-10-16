@@ -18,8 +18,8 @@ class Settings(BaseSettings):
     EMBEDDINGS_NAME: str = "huggingface_sentence-transformers/all-mpnet-base-v2"
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/1"
-    MONGO_URI: str = "mongodb://localhost:27017/docsgpt"
-    MONGO_DB_NAME: str = "docsgpt"
+    MONGO_URI: str = "mongodb://localhost:27017/rfpagent"
+    MONGO_DB_NAME: str = "rfpagent"
     LLM_PATH: str = os.path.join(current_dir, "models/docsgpt-7b-f16.gguf")
     DEFAULT_MAX_HISTORY: int = 150
     LLM_TOKEN_LIMITS: dict = {
@@ -78,7 +78,7 @@ class Settings(BaseSettings):
     ELASTIC_USERNAME: Optional[str] = None  # username for elasticsearch
     ELASTIC_PASSWORD: Optional[str] = None  # password for elasticsearch
     ELASTIC_URL: Optional[str] = None  # url for elasticsearch
-    ELASTIC_INDEX: Optional[str] = "docsgpt"  # index name for elasticsearch
+    ELASTIC_INDEX: Optional[str] = "rfpagent"  # index name for elasticsearch
 
     # SageMaker config
     SAGEMAKER_ENDPOINT: Optional[str] = None  # SageMaker endpoint name
@@ -90,7 +90,7 @@ class Settings(BaseSettings):
     PREMAI_PROJECT_ID: Optional[str] = None
 
     # Qdrant vectorstore config
-    QDRANT_COLLECTION_NAME: Optional[str] = "docsgpt"
+    QDRANT_COLLECTION_NAME: Optional[str] = "rfpagent"
     QDRANT_LOCATION: Optional[str] = None
     QDRANT_URL: Optional[str] = None
     QDRANT_PORT: Optional[int] = 6333
@@ -107,14 +107,14 @@ class Settings(BaseSettings):
     # PGVector vectorstore config
     PGVECTOR_CONNECTION_STRING: Optional[str] = None
     # Milvus vectorstore config
-    MILVUS_COLLECTION_NAME: Optional[str] = "docsgpt"
+    MILVUS_COLLECTION_NAME: Optional[str] = "rfpagent"
     MILVUS_URI: Optional[str] = "./milvus_local.db"  # milvus lite version as default
     MILVUS_TOKEN: Optional[str] = ""
 
     # LanceDB vectorstore config
     LANCEDB_PATH: str = "/tmp/lancedb"  # Path where LanceDB stores its local data
     LANCEDB_TABLE_NAME: Optional[str] = (
-        "docsgpts"  # Name of the table to use for storing vectors
+        "rfpagent"  # Name of the table to use for storing vectors
     )
 
     FLASK_DEBUG_MODE: bool = False
@@ -124,7 +124,7 @@ class Settings(BaseSettings):
     JWT_SECRET_KEY: str = ""
 
     # Encryption settings
-    ENCRYPTION_SECRET_KEY: str = "default-docsgpt-encryption-key"
+    ENCRYPTION_SECRET_KEY: str = "default-rfpagent-encryption-key"
 
     ELEVENLABS_API_KEY: Optional[str] = None
 

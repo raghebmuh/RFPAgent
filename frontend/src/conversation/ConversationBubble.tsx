@@ -40,6 +40,7 @@ import {
 import classes from './ConversationBubble.module.css';
 import { FEEDBACK, MESSAGE_TYPE } from './conversationModels';
 import { ToolCallsType } from './types';
+import { isRTL } from '../utils/stringUtils';
 
 const DisableSourceFE = import.meta.env.VITE_DISABLE_SOURCE_FE || false;
 
@@ -158,7 +159,10 @@ const ConversationBubble = forwardRef<
             {!isEditClicked && (
               <>
                 <div className="relative mr-2 flex w-full flex-col">
-                  <div className="from-medium-purple to-slate-blue mr-2 ml-2 flex max-w-full items-start gap-2 rounded-[28px] bg-linear-to-b px-5 py-4 text-sm leading-normal break-words whitespace-pre-wrap text-white sm:text-base">
+                  <div
+                    className="from-medium-purple to-slate-blue mr-2 ml-2 flex max-w-full items-start gap-2 rounded-[28px] bg-linear-to-b px-5 py-4 text-sm leading-normal break-words whitespace-pre-wrap text-white sm:text-base"
+                    dir={isRTL(message) ? 'rtl' : 'ltr'}
+                  >
                     <div
                       ref={messageRef}
                       className={`${isQuestionCollapsed ? 'line-clamp-4' : ''} w-full`}
@@ -214,6 +218,7 @@ const ConversationBubble = forwardRef<
                 }}
                 rows={5}
                 value={editInputBox}
+                dir={isRTL(editInputBox) ? 'rtl' : 'ltr'}
                 className="border-silver text-carbon dark:border-philippine-grey dark:bg-raisin-black dark:text-chinese-white w-full resize-none rounded-3xl border px-4 py-3 text-base leading-relaxed focus:outline-hidden"
               />
               <div className="flex items-center justify-end gap-2">
@@ -434,6 +439,7 @@ const ConversationBubble = forwardRef<
                   ? 'text-red-3000 dark:border-red-2000 relative flex-row items-center rounded-full border border-transparent bg-[#FFE7E7] p-2 py-5 text-sm font-normal dark:text-white'
                   : 'flex-col rounded-3xl'
               }`}
+              dir={isRTL(message) ? 'rtl' : 'ltr'}
             >
               {(() => {
                 const contentSegments = processMarkdownContent(message);
@@ -877,7 +883,10 @@ function Thought({
       </div>
       {isThoughtOpen && (
         <div className="fade-in mr-5 ml-2 max-w-[90vw] md:max-w-[70vw] lg:max-w-[50vw]">
-          <div className="bg-gray-1000 dark:bg-gun-metal rounded-[28px] px-7 py-[18px]">
+          <div
+            className="bg-gray-1000 dark:bg-gun-metal rounded-[28px] px-7 py-[18px]"
+            dir={isRTL(thought) ? 'rtl' : 'ltr'}
+          >
             <ReactMarkdown
               className="fade-in leading-normal break-words whitespace-pre-wrap"
               remarkPlugins={[remarkGfm, remarkMath]}

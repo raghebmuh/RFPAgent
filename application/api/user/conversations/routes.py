@@ -86,16 +86,25 @@ class GetConversations(Resource):
                 .limit(30)
             )
 
-            list_conversations = [
-                {
+            list_conversations = []
+            for conversation in conversations:
+                # Provide fallback name if missing or empty
+                name = conversation.get("name", "").strip()
+                if not name and conversation.get("queries"):
+                    # Use first question as fallback
+                    first_query = conversation["queries"][0].get("prompt", "")
+                    name = first_query[:30] + ("..." if len(first_query) > 30 else "") if first_query else "Untitled Chat"
+                elif not name:
+                    name = "Untitled Chat"
+
+                list_conversations.append({
                     "id": str(conversation["_id"]),
-                    "name": conversation["name"],
+                    "name": name,
                     "agent_id": conversation.get("agent_id", None),
                     "is_shared_usage": conversation.get("is_shared_usage", False),
                     "shared_token": conversation.get("shared_token", None),
-                }
-                for conversation in conversations
-            ]
+                })
+
         except Exception as err:
             current_app.logger.error(
                 f"Error retrieving conversations: {err}", exc_info=True

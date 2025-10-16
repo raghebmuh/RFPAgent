@@ -27,6 +27,7 @@ import {
 } from '../preferences/preferenceSlice';
 import Upload from '../upload/Upload';
 import { getOS, isTouchDevice } from '../utils/browserUtils';
+import { isRTL } from '../utils/stringUtils';
 import SourcesPopup from './SourcesPopup';
 import ToolsPopup from './ToolsPopup';
 
@@ -353,6 +354,7 @@ export default function MessageInput({
             onChange={handleChange}
             tabIndex={1}
             placeholder={t('inputPlaceholder')}
+            dir={isRTL(value) ? 'rtl' : 'ltr'}
             className="inputbox-style no-scrollbar bg-lotion dark:text-bright-gray dark:placeholder:text-bright-gray/50 w-full overflow-x-hidden overflow-y-auto rounded-t-[23px] px-2 text-base leading-tight whitespace-pre-wrap opacity-100 placeholder:text-gray-500 focus:outline-hidden sm:px-3 dark:bg-transparent"
             onInput={handleInput}
             onKeyDown={handleKeyDown}
