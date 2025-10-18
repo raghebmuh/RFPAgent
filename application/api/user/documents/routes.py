@@ -2,7 +2,9 @@
 
 import logging
 import os
+import uuid
 from pathlib import Path
+from datetime import datetime
 
 from bson.objectid import ObjectId
 from flask import current_app, jsonify, make_response, request, send_file
@@ -11,6 +13,9 @@ from flask_restx import fields, Namespace, Resource
 from application.api import api
 from application.api.user.base import user_documents_collection
 from application.cache import get_redis_instance
+from application.services.docx_filler_service import DocxFillerService
+from application.services.docx_placeholder_service import DocxPlaceholderService
+from application.services.rfp_content_generator import RFPContentGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -40,16 +45,22 @@ class DownloadDocument(Resource):
     def get(self, doc_id):
         """Download a Word document by document ID"""
         try:
+            # Try to get authenticated user, but allow system documents
             decoded_token = request.decoded_token
-            if not decoded_token:
-                return make_response(jsonify({"success": False}), 401)
+            user = decoded_token.get("sub") if decoded_token else None
 
-            user = decoded_token.get("sub")
+            # First try to find user-specific document
+            document = None
+            if user:
+                document = user_documents_collection.find_one(
+                    {"doc_id": doc_id, "user": user}
+                )
 
-            # Get document metadata from MongoDB
-            document = user_documents_collection.find_one(
-                {"doc_id": doc_id, "user": user}
-            )
+            # If not found, check for system-generated documents
+            if not document:
+                document = user_documents_collection.find_one(
+                    {"doc_id": doc_id, "user": "system"}
+                )
 
             if not document:
                 return make_response(
@@ -264,4 +275,284 @@ class DeleteDocument(Resource):
             logger.error(f"Error deleting document: {e}", exc_info=True)
             return make_response(
                 jsonify({"success": False, "error": f"Delete failed: {str(e)}"}), 500
+            )
+
+
+# RFP-specific endpoints
+
+# RFP data model for API documentation
+rfp_data_model = api.model(
+    "RFPDataModel",
+    {
+        "entity_name": fields.String(required=True, description="Government entity name"),
+        "project_name": fields.String(required=True, description="Project name"),
+        "tender_number": fields.String(required=True, description="Tender number"),
+        "project_scope": fields.String(required=True, description="Project scope description"),
+        "project_type": fields.String(description="Project type: IT, construction, consulting, etc."),
+        "duration_months": fields.Integer(description="Project duration in months"),
+        "conversation_id": fields.String(description="Associated conversation ID"),
+        "placeholders": fields.Raw(description="All placeholder data as key-value pairs"),
+    },
+)
+
+
+@documents_ns.route("/rfp/generate")
+class GenerateRFPDocument(Resource):
+    @api.expect(rfp_data_model)
+    @api.doc(description="Generate an RFP document from template and data")
+    def post(self):
+        """Generate an RFP document by filling the template with provided data"""
+        try:
+            decoded_token = request.decoded_token
+            if not decoded_token:
+                return make_response(jsonify({"success": False}), 401)
+
+            user = decoded_token.get("sub")
+            data = request.get_json()
+
+            # Validate required fields
+            required_fields = ["entity_name", "project_name", "project_scope"]
+            for field in required_fields:
+                if field not in data or not data[field]:
+                    return make_response(
+                        jsonify({"success": False, "error": f"Missing required field: {field}"}),
+                        400,
+                    )
+
+            # Get all placeholder data
+            placeholder_data = data.get("placeholders", {})
+
+            # Merge specific fields into placeholder data
+            for key in ["entity_name", "project_name", "tender_number", "project_scope",
+                       "project_type", "duration_months"]:
+                if key in data:
+                    placeholder_data[key] = data[key]
+
+            # Generate document ID
+            doc_id = str(uuid.uuid4())[:8]
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+            # Define paths
+            template_path = os.path.join("inputs", "templates", "rfp_template_with_placeholders.docx")
+            output_dir = os.path.join("outputs", "rfp_documents", user)
+            os.makedirs(output_dir, exist_ok=True)
+
+            file_name = f"RFP_{data['project_name'][:20].replace(' ', '_')}_{timestamp}.docx"
+            output_path = os.path.join(output_dir, file_name)
+
+            # Generate the document
+            filler_service = DocxFillerService(template_path)
+            generated_path = filler_service.fill_template(placeholder_data, output_path)
+
+            # Get document sections for preview
+            sections = filler_service.get_document_sections()
+
+            # Generate preview text
+            preview_text = filler_service.generate_preview_text(placeholder_data)
+
+            # Save metadata to database
+            document_data = {
+                "doc_id": doc_id,
+                "title": f"RFP - {data['project_name']}",
+                "file_path": generated_path,
+                "file_name": file_name,
+                "conversation_id": data.get("conversation_id"),
+                "preview_text": preview_text[:1000],  # Store first 1000 chars
+                "sections": sections,
+                "user": user,
+                "created_at": datetime.now(),
+                "document_type": "rfp",
+                "metadata": {
+                    "entity_name": data.get("entity_name"),
+                    "project_name": data.get("project_name"),
+                    "tender_number": data.get("tender_number"),
+                    "project_type": data.get("project_type"),
+                    "duration_months": data.get("duration_months"),
+                }
+            }
+
+            user_documents_collection.insert_one(document_data)
+
+            return make_response(
+                jsonify({
+                    "success": True,
+                    "doc_id": doc_id,
+                    "file_name": file_name,
+                    "sections": sections,
+                    "preview_text": preview_text[:500],
+                    "message": "تم إنشاء وثيقة RFP بنجاح"
+                }),
+                200,
+            )
+
+        except Exception as e:
+            logger.error(f"Error generating RFP document: {e}", exc_info=True)
+            return make_response(
+                jsonify({"success": False, "error": f"RFP generation failed: {str(e)}"}),
+                500,
+            )
+
+
+@documents_ns.route("/rfp/placeholders")
+class GetRFPPlaceholders(Resource):
+    @api.doc(description="Get all placeholders from the RFP template")
+    def get(self):
+        """Extract and return all placeholders from the RFP template"""
+        try:
+            decoded_token = request.decoded_token
+            if not decoded_token:
+                return make_response(jsonify({"success": False}), 401)
+
+            # Extract placeholders from template
+            template_path = os.path.join("inputs", "templates", "rfp_template_with_placeholders.docx")
+            placeholder_service = DocxPlaceholderService(template_path)
+
+            placeholders = placeholder_service.extract_placeholders()
+            dropdown_fields = placeholder_service.extract_dropdown_fields()
+            summary = placeholder_service.get_placeholder_summary()
+
+            # Get placeholder definitions
+            from application.models.rfp_placeholders import RFPPlaceholders
+            all_definitions = RFPPlaceholders.get_all_placeholders()
+
+            # Build response with definitions
+            placeholder_info = {}
+            for name, info in placeholders.items():
+                definition = all_definitions.get(name)
+                placeholder_info[name] = {
+                    "count": info.count,
+                    "locations": info.locations,
+                    "required": info.is_required,
+                    "description": info.description,
+                    "special_instructions": info.special_instructions,
+                    "arabic_name": definition.arabic_name if definition else "",
+                    "type": definition.type.value if definition else "text",
+                    "example": definition.example if definition else None,
+                    "question": definition.question_prompt if definition else None,
+                }
+
+            return make_response(
+                jsonify({
+                    "success": True,
+                    "placeholders": placeholder_info,
+                    "dropdown_fields": [
+                        {
+                            "location": field.location,
+                            "text": field.text,
+                            "options": field.options
+                        } for field in dropdown_fields
+                    ],
+                    "summary": summary,
+                    "total_placeholders": len(placeholders),
+                    "required_count": len([p for p in placeholders.values() if p.is_required])
+                }),
+                200,
+            )
+
+        except Exception as e:
+            logger.error(f"Error extracting placeholders: {e}", exc_info=True)
+            return make_response(
+                jsonify({"success": False, "error": f"Placeholder extraction failed: {str(e)}"}),
+                500,
+            )
+
+
+@documents_ns.route("/rfp/preview")
+class PreviewRFPDocument(Resource):
+    @api.expect(rfp_data_model)
+    @api.doc(description="Generate a preview of the RFP document without saving")
+    def post(self):
+        """Generate a text preview of the RFP document"""
+        try:
+            decoded_token = request.decoded_token
+            if not decoded_token:
+                return make_response(jsonify({"success": False}), 401)
+
+            data = request.get_json()
+
+            # Get all placeholder data
+            placeholder_data = data.get("placeholders", {})
+
+            # Merge specific fields
+            for key in ["entity_name", "project_name", "tender_number", "project_scope",
+                       "project_type", "duration_months"]:
+                if key in data:
+                    placeholder_data[key] = data[key]
+
+            # Generate preview
+            template_path = os.path.join("inputs", "templates", "rfp_template_with_placeholders.docx")
+            filler_service = DocxFillerService(template_path)
+
+            preview_text = filler_service.generate_preview_text(placeholder_data)
+            sections = filler_service.get_document_sections()
+            filled_content = filler_service.extract_filled_content(placeholder_data)
+
+            return make_response(
+                jsonify({
+                    "success": True,
+                    "preview_text": preview_text,
+                    "sections": sections,
+                    "filled_placeholders": list(filled_content.keys()),
+                    "completion_percentage": int(
+                        (len(filled_content) / 30) * 100  # Assuming ~30 placeholders
+                    )
+                }),
+                200,
+            )
+
+        except Exception as e:
+            logger.error(f"Error generating RFP preview: {e}", exc_info=True)
+            return make_response(
+                jsonify({"success": False, "error": f"Preview generation failed: {str(e)}"}),
+                500,
+            )
+
+
+@documents_ns.route("/rfp/validate")
+class ValidateRFPData(Resource):
+    @api.expect(rfp_data_model)
+    @api.doc(description="Validate RFP data completeness and correctness")
+    def post(self):
+        """Validate that all required RFP data is present and correct"""
+        try:
+            decoded_token = request.decoded_token
+            if not decoded_token:
+                return make_response(jsonify({"success": False}), 401)
+
+            data = request.get_json()
+            placeholder_data = data.get("placeholders", {})
+
+            # Merge specific fields
+            for key in ["entity_name", "project_name", "tender_number", "project_scope"]:
+                if key in data:
+                    placeholder_data[key] = data[key]
+
+            # Validate using placeholder service
+            template_path = os.path.join("inputs", "templates", "rfp_template_with_placeholders.docx")
+            placeholder_service = DocxPlaceholderService(template_path)
+
+            is_valid, missing_fields = placeholder_service.validate_placeholder_data(placeholder_data)
+
+            # Get questions for missing fields
+            from application.models.rfp_placeholders import RFPPlaceholders
+            questions = RFPPlaceholders.get_questions_for_missing_data(missing_fields)
+
+            return make_response(
+                jsonify({
+                    "success": True,
+                    "is_valid": is_valid,
+                    "missing_fields": missing_fields,
+                    "questions": questions,
+                    "completion_percentage": int(
+                        ((30 - len(missing_fields)) / 30) * 100  # Assuming ~30 required fields
+                    )
+                }),
+                200,
+            )
+
+        except Exception as e:
+            logger.error(f"Error validating RFP data: {e}", exc_info=True)
+            return make_response(
+                jsonify({"success": False, "error": f"Validation failed: {str(e)}"}),
+                500,
             )

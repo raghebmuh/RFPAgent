@@ -1,0 +1,35 @@
+# Exclude symbolic links
+indexes/default
+inputs/local/local
+
+# Exclude Python cache
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# Exclude test files
+*.test.py
+*_test.py
+
+# Exclude local development files
+.env
+.env.local
+.venv
+venv/
+
+# Exclude logs
+*.log
+logs/
+
+# Exclude IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Exclude OS files
+.DS_Store
+Thumbs.db
