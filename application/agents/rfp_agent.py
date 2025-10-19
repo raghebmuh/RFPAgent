@@ -10,12 +10,12 @@ from typing import Dict, List, Any, Optional, Generator, Tuple
 from datetime import datetime
 
 from application.agents.react_agent import ReActAgent
-from application.models.rfp_placeholders import (
-    RFPPlaceholders,
-    PlaceholderDefinition,
-    get_rfp_json_schema
+from application.models.rfp_template_placeholders import (
+    RFPTemplatePlaceholders,
+    PlaceholderDefinition
 )
 from application.services.docx_placeholder_service import DocxPlaceholderService
+from application.services.docx_filler_service import DocxFillerService
 from application.retriever.base import BaseRetriever
 
 logger = logging.getLogger(__name__)
@@ -30,7 +30,7 @@ class RFPAgent(ReActAgent):
     def __init__(self, *args, **kwargs):
         # Set default JSON schema for RFP if not provided
         if 'json_schema' not in kwargs or not kwargs['json_schema']:
-            kwargs['json_schema'] = get_rfp_json_schema()
+            kwargs['json_schema'] = RFPTemplatePlaceholders.get_rfp_json_schema()
 
         super().__init__(*args, **kwargs)
 
@@ -62,15 +62,16 @@ class RFPAgent(ReActAgent):
         """
         extracted_data = {}
 
-        # Keywords to placeholder mapping
+        # Keywords to placeholder mapping (matching actual template placeholders)
         keyword_mappings = {
-            "entity_name": ["الجهة", "المؤسسة", "الوزارة", "الهيئة", "المركز", "الشركة"],
-            "project_name": ["المشروع", "المنافسة", "العملية", "النظام", "التطبيق"],
+            "tender_name": ["اسم المنافسة", "اسم المشروع", "المنافسة", "المشروع"],
             "tender_number": ["رقم المنافسة", "الرقم المرجعي", "رقم المشروع"],
-            "duration_months": ["المدة", "مدة التنفيذ", "فترة العمل", "شهر", "أشهر"],
-            "budget_range": ["الميزانية", "التكلفة", "القيمة", "ريال"],
-            "location": ["المكان", "الموقع", "المدينة", "المنطقة"],
-            "project_type": ["نوع المشروع", "تقنية", "بناء", "استشارات", "توريد"]
+            "tender_purpose": ["الغرض", "الهدف", "غرض المنافسة"],
+            "technical_organization_name": ["الجهة", "المؤسسة", "الوزارة", "الهيئة", "المركز", "الشركة"],
+            "definition_department": ["الإدارة", "القسم", "الإدارة المسؤولة"],
+            "tender_documents_fees": ["الرسوم", "رسوم الوثائق", "رسوم المنافسة"],
+            "technical_inquiries_email": ["البريد الإلكتروني", "الإيميل", "البريد"],
+            "technical_inquiries_entity_name": ["جهة الاستفسارات", "الاستفسارات الفنية"]
         }
 
         # Simple extraction based on keywords (can be enhanced with NLP)
@@ -106,7 +107,7 @@ class RFPAgent(ReActAgent):
         Identify which required placeholders are missing data
         """
         self.missing_fields = []
-        required_fields = RFPPlaceholders.get_required_placeholders()
+        required_fields = RFPTemplatePlaceholders.get_required_placeholders()
 
         for field in required_fields:
             if field not in self.collected_data or not self.collected_data[field]:
@@ -126,7 +127,7 @@ class RFPAgent(ReActAgent):
         if not self.missing_fields:
             return "جميع البيانات المطلوبة متوفرة. يمكننا الآن إنشاء وثيقة RFP."
 
-        questions = RFPPlaceholders.get_questions_for_missing_data(self.missing_fields[:3])  # Ask 3 at a time
+        questions = RFPTemplatePlaceholders.get_questions_for_missing_data(self.missing_fields[:3])  # Ask 3 at a time
 
         question_text = "لإكمال وثيقة RFP، أحتاج إلى بعض المعلومات الإضافية:\n\n"
 
@@ -150,7 +151,7 @@ class RFPAgent(ReActAgent):
         errors = []
 
         for field_name, value in self.collected_data.items():
-            is_valid, error_msg = RFPPlaceholders.validate_placeholder_value(field_name, value)
+            is_valid, error_msg = RFPTemplatePlaceholders.validate_placeholder_value(field_name, value)
             if not is_valid:
                 errors.append(error_msg)
 
@@ -158,7 +159,7 @@ class RFPAgent(ReActAgent):
         missing = self.identify_missing_fields()
         if missing:
             for field in missing[:5]:  # Show max 5 missing fields
-                definition = RFPPlaceholders.get_placeholder_by_name(field)
+                definition = RFPTemplatePlaceholders.get_placeholder_by_name(field)
                 if definition:
                     errors.append(f"حقل مطلوب: {definition.arabic_name}")
 
@@ -240,7 +241,7 @@ class RFPAgent(ReActAgent):
             rfp_content["project_scope"] = self._enhance_project_scope(rfp_content)
 
         # Add default values for optional fields if not provided
-        all_placeholders = RFPPlaceholders.get_all_placeholders()
+        all_placeholders = RFPTemplatePlaceholders.get_all_placeholders()
         for name, definition in all_placeholders.items():
             if name not in rfp_content and definition.default_value:
                 rfp_content[name] = definition.default_value
@@ -371,6 +372,103 @@ class RFPAgent(ReActAgent):
 
         return prompt
 
+    def generate_rfp_document(self) -> Tuple[bool, str, str]:
+        """
+        Generate the RFP document with all collected data
+        Returns: (success, document_id, message)
+        """
+        import uuid
+
+        try:
+            # Validate data completeness
+            is_valid, errors = self.validate_collected_data()
+            if not is_valid:
+                return False, "", f"البيانات غير مكتملة: {', '.join(errors[:3])}"
+
+            # Generate document ID
+            doc_id = str(uuid.uuid4())
+
+            # Set output path
+            output_dir = "outputs/rfp_documents"
+            os.makedirs(output_dir, exist_ok=True)
+            output_path = os.path.join(
+                output_dir,
+                f"RFP_{self.collected_data.get('tender_number', 'draft')}_{doc_id[:8]}.docx"
+            )
+
+            # Fill the template
+            filler_service = DocxFillerService(self.template_path)
+            generated_path = filler_service.fill_template(self.collected_data, output_path)
+
+            # Save document metadata
+            from application.api.user.base import user_documents_collection
+            document_metadata = {
+                "doc_id": doc_id,
+                "title": f"RFP - {self.collected_data.get('tender_name', 'وثيقة طلب عروض')}",
+                "file_path": generated_path,
+                "file_name": os.path.basename(generated_path),
+                "user": "system",  # Or get from context
+                "created_at": datetime.now(),
+                "conversation_id": None,  # Can be set from context
+                "preview_text": filler_service.generate_preview_text(self.collected_data)[:500],
+                "metadata": self.collected_data
+            }
+            user_documents_collection.insert_one(document_metadata)
+
+            logger.info(f"Generated RFP document: {doc_id}")
+            return True, doc_id, f"تم إنشاء وثيقة RFP بنجاح. معرف الوثيقة: {doc_id}"
+
+        except Exception as e:
+            logger.error(f"Failed to generate RFP document: {e}")
+            return False, "", f"فشل في إنشاء الوثيقة: {str(e)}"
+
+    def get_download_link(self, doc_id: str) -> str:
+        """
+        Get download link for generated RFP document
+        """
+        # In production, this would be the actual API endpoint
+        base_url = os.getenv("API_HOST", "http://localhost:7091")
+        return f"{base_url}/api/documents/download/{doc_id}"
+
+    def format_rfp_response_with_download(self) -> str:
+        """
+        Generate the final response with download link after RFP generation
+        """
+        # Check if all data is collected
+        is_valid, errors = self.validate_collected_data()
+
+        if not is_valid:
+            # Still missing data - ask questions
+            return self.generate_questions_for_missing_data()
+
+        # Generate the document
+        success, doc_id, message = self.generate_rfp_document()
+
+        if success:
+            download_link = self.get_download_link(doc_id)
+
+            response = f"""✅ {message}
+
+📄 **تم إنشاء وثيقة طلب تقديم العروض (RFP) بنجاح!**
+
+المعلومات الأساسية:
+• اسم المنافسة: {self.collected_data.get('tender_name', 'غير محدد')}
+• رقم المنافسة: {self.collected_data.get('tender_number', 'غير محدد')}
+• الجهة: {self.collected_data.get('technical_organization_name', 'غير محدد')}
+
+📥 **تحميل الوثيقة:**
+[اضغط هنا لتحميل وثيقة RFP]({download_link})
+
+الوثيقة بصيغة Microsoft Word قابلة للتعديل وتحتوي على جميع البيانات المطلوبة.
+
+هل تحتاج إلى تعديل أي معلومات أو إنشاء نسخة جديدة؟"""
+
+            return response
+        else:
+            return f"""❌ {message}
+
+يرجى التحقق من البيانات والمحاولة مرة أخرى."""
+
 
 def create_rfp_agent_config() -> Dict[str, Any]:
     """
@@ -382,7 +480,7 @@ def create_rfp_agent_config() -> Dict[str, Any]:
         "description": "وكيل متخصص في إنشاء وثائق طلب تقديم العروض (RFP) للمشاريع الحكومية السعودية. يقوم بجمع معلومات المشروع وإنشاء وثيقة RFP احترافية متوافقة مع الأنظمة الحكومية.",
         "agent_type": "ReActRFP",  # Special type to identify RFP agents
         "prompt_template": RFPAgent().generate_agent_prompt(),
-        "json_schema": get_rfp_json_schema(),
+        "json_schema": RFPTemplatePlaceholders.get_rfp_json_schema(),
         "tools": ["rfp_reference_tool", "document_search"],  # Tools the agent can use
         "chunks": 5,
         "retriever": "classic_rag",
