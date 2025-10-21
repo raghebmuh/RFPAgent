@@ -166,7 +166,7 @@ class ConversationService:
             conversation_data = {
                 "user": user_id,
                 "date": current_time,
-                "name": conversation_name,
+                "name": completion,
                 "queries": [
                     {
                         "prompt": question,

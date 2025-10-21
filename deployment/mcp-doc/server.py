@@ -6,6 +6,7 @@ Provides tools for creating, editing, and managing .docx files with Arabic RFP t
 import os
 import sys
 import uuid
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -25,6 +26,9 @@ except ImportError:
     RFPSection = None
     TableSpec = None
     print("Warning: Arabic RFP template not available")
+
+# Initialize logging
+logger = logging.getLogger(__name__)
 
 # Initialize FastMCP server
 mcp = FastMCP("MCP-Doc Server")
@@ -120,13 +124,18 @@ def create_rfp_document(
     document_metadata[doc_id]["file_name"] = file_name
     document_metadata[doc_id]["saved_at"] = datetime.now().isoformat()
 
+    # Construct download URL
+    api_host = os.getenv("API_HOST", "http://localhost:7091")
+    download_url = f"{api_host}/api/documents/download/{doc_id}"
+
     return {
         "success": True,
         "doc_id": doc_id,
         "title": title,
         "file_path": str(file_path),
         "file_name": file_name,
-        "message": f"RFP document '{title}' created and saved successfully"
+        "download_url": download_url,
+        "message": f"RFP document '{title}' created and saved successfully. Download at: {download_url}"
     }
 
 
@@ -268,15 +277,20 @@ def create_rfp_from_template(
         document_metadata[doc_id]["file_name"] = file_name
         document_metadata[doc_id]["saved_at"] = datetime.now().isoformat()
 
+        # Construct download URL
+        api_host = os.getenv("API_HOST", "http://localhost:7091")
+        download_url = f"{api_host}/api/documents/download/{doc_id}"
+
         return {
             "success": True,
             "doc_id": doc_id,
             "title": title,
             "file_path": str(file_path),
             "file_name": file_name,
+            "download_url": download_url,
             "template_used": template_name,
             "sections_count": len(sections),
-            "message": f"تم إنشاء كراسة الشروط '{title}' بنجاح من القالب '{template_name}' وحفظها تلقائياً"
+            "message": f"تم إنشاء كراسة الشروط '{title}' بنجاح من القالب '{template_name}' وحفظها تلقائياً. التحميل: {download_url}"
         }
 
     except Exception as e:
@@ -480,6 +494,10 @@ def create_arabic_rfp_document(
         document_metadata[doc_id]["file_name"] = file_name
         document_metadata[doc_id]["saved_at"] = datetime.now().isoformat()
 
+        # Construct download URL
+        api_host = os.getenv("API_HOST", "http://localhost:7091")
+        download_url = f"{api_host}/api/documents/download/{doc_id}"
+
         return {
             "success": True,
             "doc_id": doc_id,
@@ -489,7 +507,8 @@ def create_arabic_rfp_document(
             "sections_count": len(sections_added),
             "file_path": str(file_path),
             "file_name": file_name,
-            "message": f"تم إنشاء كراسة الشروط والمواصفات الكاملة '{title}' بنجاح مع {len(sections_added)} قسم وحفظها تلقائياً"
+            "download_url": download_url,
+            "message": f"تم إنشاء كراسة الشروط والمواصفات الكاملة '{title}' بنجاح مع {len(sections_added)} قسم وحفظها تلقائياً. التحميل: {download_url}"
         }
 
     else:
@@ -550,6 +569,10 @@ def create_arabic_rfp_document(
         document_metadata[doc_id]["file_name"] = file_name
         document_metadata[doc_id]["saved_at"] = datetime.now().isoformat()
 
+        # Construct download URL
+        api_host = os.getenv("API_HOST", "http://localhost:7091")
+        download_url = f"{api_host}/api/documents/download/{doc_id}"
+
         return {
             "success": True,
             "doc_id": doc_id,
@@ -557,7 +580,8 @@ def create_arabic_rfp_document(
             "language": "ar",
             "file_path": str(file_path),
             "file_name": file_name,
-            "message": f"تم إنشاء كراسة الشروط '{title}' بنجاح وحفظها تلقائياً"
+            "download_url": download_url,
+            "message": f"تم إنشاء كراسة الشروط '{title}' بنجاح وحفظها تلقائياً. التحميل: {download_url}"
         }
 
 
@@ -722,12 +746,17 @@ def save_document(doc_id: str) -> dict:
     metadata["file_name"] = file_name
     metadata["saved_at"] = datetime.now().isoformat()
 
+    # Construct download URL
+    api_host = os.getenv("API_HOST", "http://localhost:7091")
+    download_url = f"{api_host}/api/documents/download/{doc_id}"
+
     return {
         "success": True,
         "doc_id": doc_id,
         "file_name": file_name,
         "file_path": str(file_path),
-        "message": f"Document saved as {file_name}"
+        "download_url": download_url,
+        "message": f"Document saved as {file_name}. Download at: {download_url}"
     }
 
 
