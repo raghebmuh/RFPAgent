@@ -1,6 +1,12 @@
 import 'katex/dist/katex.min.css';
 
-import { forwardRef, Fragment, useEffect, useRef, useState } from 'react';
+import React, {
+  forwardRef,
+  Fragment,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
 import { useSelector } from 'react-redux';
@@ -36,6 +42,7 @@ import { useDarkTheme, useOutsideAlerter } from '../hooks';
 import {
   selectChunks,
   selectSelectedDocs,
+  selectToken,
 } from '../preferences/preferenceSlice';
 import classes from './ConversationBubble.module.css';
 import { FEEDBACK, MESSAGE_TYPE } from './conversationModels';
@@ -161,8 +168,16 @@ const ConversationBubble = forwardRef<
                 <div className="relative mr-2 flex w-full flex-col">
                   <div
                     className="from-medium-purple to-slate-blue mr-2 ml-2 flex max-w-full items-start gap-2 rounded-[28px] bg-linear-to-b px-5 py-4 text-sm leading-normal break-words whitespace-pre-wrap text-white sm:text-base"
-                    dir={/[\u0600-\u06FF\u0750-\u077F]/.test(message ?? '') ? 'rtl' : 'ltr'}
-                    style={/[\u0600-\u06FF\u0750-\u077F]/.test(message ?? '') ? { textAlign: 'right' } : undefined}
+                    dir={
+                      /[\u0600-\u06FF\u0750-\u077F]/.test(message ?? '')
+                        ? 'rtl'
+                        : 'ltr'
+                    }
+                    style={
+                      /[\u0600-\u06FF\u0750-\u077F]/.test(message ?? '')
+                        ? { textAlign: 'right' }
+                        : undefined
+                    }
                   >
                     <div
                       ref={messageRef}
@@ -219,8 +234,16 @@ const ConversationBubble = forwardRef<
                 }}
                 rows={5}
                 value={editInputBox}
-                dir={/[\u0600-\u06FF\u0750-\u077F]/.test(editInputBox) ? 'rtl' : 'ltr'}
-                style={/[\u0600-\u06FF\u0750-\u077F]/.test(editInputBox) ? { textAlign: 'right' } : undefined}
+                dir={
+                  /[\u0600-\u06FF\u0750-\u077F]/.test(editInputBox)
+                    ? 'rtl'
+                    : 'ltr'
+                }
+                style={
+                  /[\u0600-\u06FF\u0750-\u077F]/.test(editInputBox)
+                    ? { textAlign: 'right' }
+                    : undefined
+                }
                 className="border-silver text-carbon dark:border-philippine-grey dark:bg-raisin-black dark:text-chinese-white w-full resize-none rounded-3xl border px-4 py-3 text-base leading-relaxed focus:outline-hidden"
               />
               <div className="flex items-center justify-end gap-2">
@@ -442,7 +465,11 @@ const ConversationBubble = forwardRef<
                   : 'flex-col rounded-3xl'
               }`}
               dir={/[\u0600-\u06FF\u0750-\u077F]/.test(message) ? 'rtl' : 'ltr'}
-              style={/[\u0600-\u06FF\u0750-\u077F]/.test(message) ? { textAlign: 'right' } : undefined}
+              style={
+                /[\u0600-\u06FF\u0750-\u077F]/.test(message)
+                  ? { textAlign: 'right' }
+                  : undefined
+              }
             >
               {(() => {
                 const contentSegments = processMarkdownContent(message);
@@ -451,7 +478,10 @@ const ConversationBubble = forwardRef<
                     {contentSegments.map((segment, index) => (
                       <Fragment key={index}>
                         {segment.type === 'text' ? (
-                          <TextWithDocumentButtons content={segment.content} isDarkTheme={isDarkTheme} />
+                          <TextWithDocumentButtons
+                            content={segment.content}
+                            isDarkTheme={isDarkTheme}
+                          />
                         ) : segment.type === 'mermaid' ? (
                           <div
                             className="my-4 w-full"
@@ -635,39 +665,117 @@ function AllSources(sources: AllSourcesProps) {
   );
 }
 // Component to detect doc_ids in text and add download buttons
-function TextWithDocumentButtons({ content, isDarkTheme }: { content: string; isDarkTheme: boolean }) {
+function TextWithDocumentButtons({
+  content,
+  isDarkTheme,
+}: {
+  content: string;
+  isDarkTheme: boolean;
+}) {
   // Regex to detect UUID patterns (doc_id format)
-  const uuidRegex = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi;
+  const uuidRegex =
+    /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi;
   const matches = content.match(uuidRegex);
+  const token = useSelector(selectToken);
 
   const downloadDocument = async (docId: string) => {
     try {
-      const response = await fetch(
-        `${import.meta.env.VITE_API_HOST}/api/documents/download/${docId}`,
-        {
+      // console.log('Attempting to download document:', docId);
+      // console.log('API Host:', import.meta.env.VITE_API_HOST);
+      // console.log('Token present:', !!token);
+      // console.log('Token value:', token);
+      // console.log('LocalStorage authToken:', localStorage.getItem('authToken'));
+
+      const downloadUrl = `${import.meta.env.VITE_API_HOST}/api/documents/download/${docId}`;
+
+      // Try the fetch approach first
+      try {
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+        };
+
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+
+        const response = await fetch(downloadUrl, {
           method: 'GET',
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`,
-          },
-        },
-      );
+          headers,
+        });
 
-      if (!response.ok) {
-        throw new Error('Download failed');
+        // console.log('Response status:', response.status);
+        // console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(
+            'Download failed:',
+            response.status,
+            response.statusText,
+            errorText,
+          );
+          throw new Error(
+            `Download failed: ${response.status} ${response.statusText}`,
+          );
+        }
+
+        // Handle the blob response more carefully
+        const blob = await response.blob();
+        console.log('Blob created successfully, size:', blob.size);
+
+        // Create download URL
+        const url = window.URL.createObjectURL(blob);
+        console.log('Object URL created:', url);
+
+        // Create download link
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `document_${docId.substring(0, 8)}.docx`;
+        link.style.display = 'none';
+
+        // Add to DOM, trigger download, and clean up
+        document.body.appendChild(link);
+
+        try {
+          link.click();
+          console.log('Download link clicked successfully');
+        } catch (clickError) {
+          console.error('Error clicking download link:', clickError);
+          throw clickError;
+        }
+
+        // Clean up after a short delay to ensure download starts
+        setTimeout(() => {
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(url);
+          console.log('Download cleanup completed');
+        }, 1000);
+
+        console.log('Download completed successfully');
+        return;
+      } catch (fetchError) {
+        console.error('Fetch approach failed:', fetchError);
+        console.log('Trying direct link approach as fallback...');
+
+        // Fallback: Direct link approach
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = `document_${docId.substring(0, 8)}.docx`;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.style.display = 'none';
+
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        console.log('Direct link download attempted');
       }
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `document_${docId.substring(0, 8)}.docx`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Error downloading document:', error);
-      alert('Failed to download document. Please try again.');
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error occurred';
+      alert(`Failed to download document: ${errorMessage}`);
     }
   };
 
@@ -717,14 +825,18 @@ function TextWithDocumentButtons({ content, isDarkTheme }: { content: string; is
           },
           ul({ children }) {
             return (
-              <ul className={`list-inside list-disc pl-4 whitespace-normal ${classes.list}`}>
+              <ul
+                className={`list-inside list-disc pl-4 whitespace-normal ${classes.list}`}
+              >
                 {children}
               </ul>
             );
           },
           ol({ children }) {
             return (
-              <ol className={`list-inside list-decimal pl-4 whitespace-normal ${classes.list}`}>
+              <ol
+                className={`list-inside list-decimal pl-4 whitespace-normal ${classes.list}`}
+              >
                 {children}
               </ol>
             );
@@ -766,7 +878,7 @@ function TextWithDocumentButtons({ content, isDarkTheme }: { content: string; is
   }
 
   // Split content by doc_ids and insert download buttons
-  const parts: JSX.Element[] = [];
+  const parts: React.ReactElement[] = [];
   let lastIndex = 0;
 
   content.replace(uuidRegex, (match, offset) => {
@@ -786,13 +898,16 @@ function TextWithDocumentButtons({ content, isDarkTheme }: { content: string; is
 
     // Add the doc_id with download button
     parts.push(
-      <span key={`docid-${offset}`} className="inline-flex items-center gap-2 mx-1">
-        <code className="dark:bg-independence dark:text-bright-gray rounded-[6px] bg-gray-200 px-[8px] py-[4px] text-xs font-mono">
+      <span
+        key={`docid-${offset}`}
+        className="mx-1 inline-flex items-center gap-2"
+      >
+        <code className="dark:bg-independence dark:text-bright-gray rounded-[6px] bg-gray-200 px-[8px] py-[4px] font-mono text-xs">
           {match}
         </code>
         <button
           onClick={() => downloadDocument(match)}
-          className="inline-flex items-center gap-1 rounded-full bg-blue-600 hover:bg-blue-700 px-3 py-1 text-xs font-medium text-white transition-colors"
+          className="inline-flex items-center gap-1 rounded-full bg-blue-600 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-blue-700"
           title="Download document"
         >
           <svg
@@ -831,7 +946,11 @@ function TextWithDocumentButtons({ content, isDarkTheme }: { content: string; is
     );
   }
 
-  return <div className="fade-in leading-normal break-words whitespace-pre-wrap">{parts}</div>;
+  return (
+    <div className="fade-in leading-normal break-words whitespace-pre-wrap">
+      {parts}
+    </div>
+  );
 }
 
 export default ConversationBubble;

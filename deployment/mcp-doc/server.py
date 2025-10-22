@@ -144,8 +144,8 @@ def create_rfp_from_template(
     template_name: str,
     title: str,
     project_name: str,
-    entity_name: Optional[str] = None,
-    tender_no: Optional[str] = None,
+    technical_organization_name: Optional[str] = None,
+    tender_number: Optional[str] = None,
     project_description: Optional[str] = None,
     scope_of_work: Optional[str] = None,
     budget: Optional[str] = None,
@@ -162,8 +162,8 @@ def create_rfp_from_template(
         template_name: Name of the reference RFP file to use as template (e.g., "كراسة تطبيق أتمتة خدمات تقنية المعلومات للمركز (المرحلة الأولى).docx")
         title: The title for the new RFP document
         project_name: Name of the project
-        entity_name: Optional name of the government entity
-        tender_no: Optional tender/RFP number
+        technical_organization_name: Optional name of the government entity
+        tender_number: Optional tender/RFP number
         project_description: Optional detailed project description
         scope_of_work: Optional scope of work details
         budget: Optional budget information
@@ -199,10 +199,10 @@ def create_rfp_from_template(
         replacements = {
             "[اسم المشروع]": project_name,
             "[اسم المنافسة]": project_name,
-            "[اسم الجهة]": entity_name or "[اسم الجهة]",
-            "[الجهة الحكومية]": entity_name or "[اسم الجهة]",
-            "[رقم الكراسة]": tender_no or "[رقم الكراسة]",
-            "[رقم المنافسة]": tender_no or "[رقم الكراسة]",
+            "[اسم الجهة]": technical_organization_name or "[اسم الجهة]",
+            "[الجهة الحكومية]": technical_organization_name or "[اسم الجهة]",
+            "[رقم الكراسة]": tender_number or "[رقم الكراسة]",
+            "[رقم المنافسة]": tender_number or "[رقم الكراسة]",
             "[التاريخ]": date or datetime.now().strftime('%Y/%m/%d'),
             "[وصف المشروع]": project_description or "[وصف المشروع]",
             "[نطاق العمل]": scope_of_work or "[نطاق العمل]",
@@ -234,7 +234,7 @@ def create_rfp_from_template(
         core_properties = doc.core_properties
         core_properties.title = title
         core_properties.subject = f"كراسة الشروط والمواصفات - {project_name}"
-        core_properties.author = entity_name or "RFPAgent"
+        core_properties.author = technical_organization_name or "RFPAgent"
 
         # Store document in memory
         active_documents[doc_id] = doc
@@ -256,8 +256,8 @@ def create_rfp_from_template(
             "doc_id": doc_id,
             "title": title,
             "project_name": project_name,
-            "entity_name": entity_name,
-            "tender_no": tender_no,
+            "technical_organization_name": technical_organization_name,
+            "tender_number": tender_number,
             "created_at": datetime.now().isoformat(),
             "language": "ar",
             "rtl": True,
@@ -300,289 +300,154 @@ def create_rfp_from_template(
             "error": f"Failed to create RFP from template: {str(e)}"
         }
 
-
+ 
 @mcp.tool()
 def create_arabic_rfp_document(
+    placeholders: dict,
     title: str,
-    project_name: str,
-    entity_name: Optional[str] = None,
-    tender_no: Optional[str] = None,
-    date: Optional[str] = None
+    tender_name: str,
+    technical_organization_name: Optional[str] = None,
+    tender_number: Optional[str] = None,
+    date: Optional[str] = None,
+    conversation_id: Optional[str] = None
 ) -> dict:
     """
-    Create a comprehensive Arabic RFP (كراسة الشروط والمواصفات) document with full KSA structure.
+    Fill the RFP template with placeholder data and generate a downloadable document with full KSA structure.
 
-    This function generates a complete Arabic RFP document following the Saudi Arabian Etimad platform
-    structure with 11 standard sections, proper RTL formatting, and Arabic typography.
+    This tool fills the specific template file at inputs/templates/rfp_template_with_placeholders.docx
+    with the provided placeholder values and generates a ready-to-download RFP document.
 
     Args:
+        placeholders: Dictionary of placeholder names and their values (e.g., {"tender_name": "Project XYZ", "tender_number": "TC-2025-001"})
         title: The title of the RFP document (Arabic)
-        project_name: Name of the project (Arabic)
-        entity_name: Optional government entity name (Arabic)
-        tender_no: Optional tender/RFP number
+        tender_name: Name of the tender/project for the document title (Arabic)
+        technical_organization_name: Optional government entity name (Arabic)
+        tender_number: Optional tender/RFP number (Arabic)
         date: Optional date (defaults to current date in Arabic)
+        conversation_id: Optional conversation ID to link the document (Arabic)
 
     Returns:
-        dict with doc_id, title, and full document structure
+        dict with success status, doc_id, download_button, and file information (Arabic)
     """
-    doc_id = str(uuid.uuid4())
-    doc = Document()
+    try:
+        from docx import Document as DocxDocument
 
-    # Set up document properties
-    core_properties = doc.core_properties
-    core_properties.title = title
-    core_properties.subject = f"كراسة الشروط والمواصفات - {project_name}"
-    core_properties.author = entity_name or "RFPAgent"
+        # Template path (mounted from host)
+        template_path = Path("/app/inputs/templates/rfp_template_with_placeholders.docx")
 
-    # Generate full RFP structure using template
-    if RFPTemplateKSA:
-        context = {
-            "entity_name": entity_name or "[اسم الجهة]",
-            "project_name": project_name,
-            "tender_no": tender_no or "[رقم الكراسة]",
-            "date": date or datetime.now().strftime('%Y/%m/%d')
-        }
+        if not template_path.exists():
+            return {
+                "success": False,
+                "error": f"Template file not found at {template_path}. Please ensure the template is mounted correctly."
+            }
 
-        rfp_doc = RFPTemplateKSA.generate(context)
+        # Generate document ID
+        doc_id = str(uuid.uuid4())
 
-        # Add title page with RTL support
-        title_paragraph = doc.add_heading(title, level=0)
-        title_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        set_rtl_paragraph(title_paragraph)
-        for run in title_paragraph.runs:
-            set_arabic_font(run, font_size=24)
+        # Load the template
+        doc = DocxDocument(str(template_path))
 
-        # Add document info with RTL support
-        info_paragraph = doc.add_paragraph()
-        set_rtl_paragraph(info_paragraph)
-        run = info_paragraph.add_run(f"اسم المشروع: {project_name}")
-        run.bold = True
-        set_arabic_font(run, font_size=16)
+        # Set up document properties
+        core_properties = doc.core_properties
+        core_properties.title = title
+        core_properties.subject = f"كراسة الشروط والمواصفات - {tender_name}"
+        core_properties.author = technical_organization_name or "RFPAgent"
 
-        if entity_name:
-            entity_para = doc.add_paragraph(f"الجهة: {entity_name}")
-            set_rtl_paragraph(entity_para)
-            for run in entity_para.runs:
-                set_arabic_font(run)
+        # Replace placeholders in paragraphs
+        for paragraph in doc.paragraphs:
+            for placeholder_name, value in placeholders.items():
+                placeholder_pattern = f"{{{placeholder_name}}}"
+                if placeholder_pattern in paragraph.text:
+                    # Replace placeholder in each run
+                    for run in paragraph.runs:
+                        if placeholder_pattern in run.text:
+                            run.text = run.text.replace(placeholder_pattern, str(value))
 
-        if tender_no:
-            tender_para = doc.add_paragraph(f"رقم الكراسة: {tender_no}")
-            set_rtl_paragraph(tender_para)
-            for run in tender_para.runs:
-                set_arabic_font(run)
-
-        date_para = doc.add_paragraph(f"التاريخ: {date or datetime.now().strftime('%Y/%m/%d')}")
-        set_rtl_paragraph(date_para)
-        for run in date_para.runs:
-            set_arabic_font(run)
-
-        # Add page break
-        doc.add_page_break()
-
-        # Helper function to recursively process sections and their children
-        def process_section(section, parent_level=0):
-            """Recursively process a section and all its children"""
-            # Add section heading
-            heading_level = min(section.level + parent_level, 3)  # Limit to level 3
-            heading_para = doc.add_heading(section.title, level=heading_level)
-            set_rtl_paragraph(heading_para)
-            for run in heading_para.runs:
-                set_arabic_font(run, font_size=18 if heading_level == 1 else 16)
-
-            # Add articles as bullet points
-            if section.articles:
-                for article in section.articles:
-                    para = doc.add_paragraph(article, style='List Bullet')
-                    set_rtl_paragraph(para)
-                    for run in para.runs:
-                        set_arabic_font(run, font_size=14)
-
-            # Add body content
-            if section.body:
-                body_para = doc.add_paragraph(section.body)
-                set_rtl_paragraph(body_para)
-                for run in body_para.runs:
-                    set_arabic_font(run, font_size=14)
-                doc.add_paragraph()  # Add spacing
-
-            # Add tables
-            for table_spec in section.tables:
-                if table_spec.title:
-                    table_title_para = doc.add_paragraph()
-                    run = table_title_para.add_run(table_spec.title)
-                    run.bold = True
-                    set_rtl_paragraph(table_title_para)
-                    set_arabic_font(run, font_size=14)
-
-                # Create table
-                rows = len(table_spec.rows) + 1  # +1 for header
-                cols = len(table_spec.columns)
-                if rows > 1 and cols > 0:
-                    table = doc.add_table(rows=rows, cols=cols)
-                    table.style = 'Light Grid Accent 1'
-
-                    # Add header row
-                    for j, col_name in enumerate(table_spec.columns):
-                        cell = table.rows[0].cells[j]
-                        cell.text = col_name
-                        for paragraph in cell.paragraphs:
-                            set_rtl_paragraph(paragraph)
-                            for run in paragraph.runs:
-                                run.font.bold = True
-                                set_arabic_font(run, font_size=14)
-
-                    # Add data rows
-                    for i, row_data in enumerate(table_spec.rows, 1):
-                        for j, cell_data in enumerate(row_data):
-                            cell = table.rows[i].cells[j]
-                            cell.text = str(cell_data) if cell_data else ""
-                            for paragraph in cell.paragraphs:
-                                set_rtl_paragraph(paragraph)
+        # Replace placeholders in tables
+        for table in doc.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    for paragraph in cell.paragraphs:
+                        for placeholder_name, value in placeholders.items():
+                            placeholder_pattern = f"{{{placeholder_name}}}"
+                            if placeholder_pattern in paragraph.text:
                                 for run in paragraph.runs:
-                                    set_arabic_font(run, font_size=13)
+                                    if placeholder_pattern in run.text:
+                                        run.text = run.text.replace(placeholder_pattern, str(value))
 
-                if table_spec.note:
-                    note_para = doc.add_paragraph(f"ملاحظة: {table_spec.note}")
-                    set_rtl_paragraph(note_para)
-                    for run in note_para.runs:
-                        run.font.italic = True
-                        set_arabic_font(run, font_size=12)
+        # Replace placeholders in headers and footers
+        for section in doc.sections:
+            # Header
+            for paragraph in section.header.paragraphs:
+                for placeholder_name, value in placeholders.items():
+                    placeholder_pattern = f"{{{placeholder_name}}}"
+                    if placeholder_pattern in paragraph.text:
+                        for run in paragraph.runs:
+                            if placeholder_pattern in run.text:
+                                run.text = run.text.replace(placeholder_pattern, str(value))
 
-                doc.add_paragraph()  # Add spacing after table
+            # Footer
+            for paragraph in section.footer.paragraphs:
+                for placeholder_name, value in placeholders.items():
+                    placeholder_pattern = f"{{{placeholder_name}}}"
+                    if placeholder_pattern in paragraph.text:
+                        for run in paragraph.runs:
+                            if placeholder_pattern in run.text:
+                                run.text = run.text.replace(placeholder_pattern, str(value))
 
-            # Record section in metadata
-            sections_added.append({
-                "code": section.code,
-                "title": section.title,
-                "level": section.level
-            })
+        # Generate safe filename with doc_id for easy lookup
+        safe_tender_name = "".join(c if c.isalnum() or c in (' ', '-', '_') else '_' for c in tender_name)
+        safe_tender_name = safe_tender_name.replace(' ', '_')[:50]
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        # Include first 8 chars of doc_id in filename for download lookup
+        file_name = f"RFP_{safe_tender_name}_{doc_id[:8]}_{timestamp}.docx"
 
-            # Recursively process child sections
-            if hasattr(section, 'children') and section.children:
-                for child_section in section.children:
-                    process_section(child_section, parent_level=heading_level)
-
-        # Add all sections from template (with recursive processing)
-        sections_added = []
-        for section in rfp_doc.sections:
-            process_section(section)
-
-        # Store document with full metadata
-        active_documents[doc_id] = doc
-        document_metadata[doc_id] = {
-            "doc_id": doc_id,
-            "title": title,
-            "project_name": project_name,
-            "entity_name": entity_name,
-            "tender_no": tender_no,
-            "created_at": datetime.now().isoformat(),
-            "language": "ar",
-            "rtl": True,
-            "template": "KSA_Etimad",
-            "sections": sections_added
-        }
-
-        # AUTO-SAVE: Save document to disk immediately after creation
-        safe_title = "".join(c if c.isalnum() or c in (' ', '-', '_') else '_' for c in title)
-        safe_title = safe_title.replace(' ', '_')
-        file_name = f"{safe_title}_{doc_id[:8]}.docx"
+        # Save to documents directory
         file_path = DOCUMENTS_DIR / file_name
         doc.save(str(file_path))
 
-        # Update metadata with file information
-        document_metadata[doc_id]["file_path"] = str(file_path)
-        document_metadata[doc_id]["file_name"] = file_name
-        document_metadata[doc_id]["saved_at"] = datetime.now().isoformat()
+        # Store document metadata
+        active_documents[doc_id] = doc
+        document_metadata[doc_id] = {
+            "doc_id": doc_id,
+            "title": f"RFP - {tender_name}",
+            "tender_name": tender_name,
+            "conversation_id": conversation_id,
+            "created_at": datetime.now().isoformat(),
+            "file_path": str(file_path),
+            "file_name": file_name,
+            "saved_at": datetime.now().isoformat(),
+            "template_used": "rfp_template_with_placeholders.docx",
+            "placeholders_filled": len(placeholders),
+            "language": "ar",
+            "rtl": True
+        }
 
         # Construct download URL
         api_host = os.getenv("API_HOST", "http://localhost:7091")
         download_url = f"{api_host}/api/documents/download/{doc_id}"
 
-        return {
-            "success": True,
-            "doc_id": doc_id,
-            "title": title,
-            "language": "ar",
-            "template": "KSA_Etimad",
-            "sections_count": len(sections_added),
-            "file_path": str(file_path),
-            "file_name": file_name,
-            "download_url": download_url,
-            "message": f"تم إنشاء كراسة الشروط والمواصفات الكاملة '{title}' بنجاح مع {len(sections_added)} قسم وحفظها تلقائياً. التحميل: {download_url}"
-        }
-
-    else:
-        # Fallback to simple document if template not available
-        title_paragraph = doc.add_heading(title, level=0)
-        title_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        set_rtl_paragraph(title_paragraph)
-        for run in title_paragraph.runs:
-            set_arabic_font(run, font_size=20)
-
-        info_paragraph = doc.add_paragraph()
-        set_rtl_paragraph(info_paragraph)
-        run = info_paragraph.add_run(f"اسم المشروع: {project_name}")
-        run.bold = True
-        set_arabic_font(run)
-
-        if entity_name:
-            entity_para = doc.add_paragraph(f"الجهة: {entity_name}")
-            set_rtl_paragraph(entity_para)
-            for run in entity_para.runs:
-                set_arabic_font(run)
-
-        if tender_no:
-            tender_para = doc.add_paragraph(f"رقم الكراسة: {tender_no}")
-            set_rtl_paragraph(tender_para)
-            for run in tender_para.runs:
-                set_arabic_font(run)
-
-        date_para = doc.add_paragraph(f"التاريخ: {date or datetime.now().strftime('%Y/%m/%d')}")
-        set_rtl_paragraph(date_para)
-        for run in date_para.runs:
-            set_arabic_font(run)
-
-        doc.add_page_break()
-
-        active_documents[doc_id] = doc
-        document_metadata[doc_id] = {
-            "doc_id": doc_id,
-            "title": title,
-            "project_name": project_name,
-            "entity_name": entity_name,
-            "tender_no": tender_no,
-            "created_at": datetime.now().isoformat(),
-            "language": "ar",
-            "rtl": True,
-            "sections": []
-        }
-
-        # AUTO-SAVE: Save document to disk immediately after creation
-        safe_title = "".join(c if c.isalnum() or c in (' ', '-', '_') else '_' for c in title)
-        safe_title = safe_title.replace(' ', '_')
-        file_name = f"{safe_title}_{doc_id[:8]}.docx"
-        file_path = DOCUMENTS_DIR / file_name
-        doc.save(str(file_path))
-
-        # Update metadata with file information
-        document_metadata[doc_id]["file_path"] = str(file_path)
-        document_metadata[doc_id]["file_name"] = file_name
-        document_metadata[doc_id]["saved_at"] = datetime.now().isoformat()
-
-        # Construct download URL
-        api_host = os.getenv("API_HOST", "http://localhost:7091")
-        download_url = f"{api_host}/api/documents/download/{doc_id}"
+        logger.info(f"Successfully filled RFP template. Doc ID: {doc_id}, File: {file_name}")
 
         return {
             "success": True,
             "doc_id": doc_id,
-            "title": title,
-            "language": "ar",
-            "file_path": str(file_path),
+            "title": f"RFP - {tender_name}",
             "file_name": file_name,
+            "file_path": str(file_path),
             "download_url": download_url,
-            "message": f"تم إنشاء كراسة الشروط '{title}' بنجاح وحفظها تلقائياً. التحميل: {download_url}"
+            "placeholders_filled": len(placeholders),
+            "template_used": "rfp_template_with_placeholders.docx",
+            "message": f"تم إنشاء وثيقة RFP بنجاح باستخدام القالب المحدد. تم ملء {len(placeholders)} حقل. يمكنك تحميل الوثيقة من الرابط."
         }
+
+    except Exception as e:
+        logger.error(f"Error filling RFP template: {e}", exc_info=True)
+        return {
+            "success": False,
+            "error": f"Failed to fill template: {str(e)}"
+        }
+        
 
 
 @mcp.tool()

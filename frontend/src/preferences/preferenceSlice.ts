@@ -175,6 +175,18 @@ prefListenerMiddleware.startListening({
   },
 });
 
+prefListenerMiddleware.startListening({
+  matcher: isAnyOf(setToken),
+  effect: (action, listenerApi) => {
+    const token = (listenerApi.getState() as RootState).preference.token;
+    if (token) {
+      localStorage.setItem('authToken', token);
+    } else {
+      localStorage.removeItem('authToken');
+    }
+  },
+});
+
 export const selectApiKey = (state: RootState) => state.preference.apiKey;
 export const selectApiKeyStatus = (state: RootState) =>
   !!state.preference.apiKey;

@@ -49,17 +49,12 @@ class DownloadDocument(Resource):
             decoded_token = request.decoded_token
             user = decoded_token.get("sub") if decoded_token else None
 
-            # First try to find user-specific document
+            # Try to get document metadata from MongoDB
             document = None
             if user:
                 document = user_documents_collection.find_one(
                     {"doc_id": doc_id, "user": user}
                 )
-
-            # Try to get document metadata from MongoDB
-            document = user_documents_collection.find_one(
-                {"doc_id": doc_id, "user": user}
-            )
 
             file_path = None
             file_name = f"document_{doc_id[:8]}.docx"
@@ -105,12 +100,20 @@ class DownloadDocument(Resource):
                 )
 
             # Send file for download
-            return send_file(
+            response = send_file(
                 file_path,
                 as_attachment=True,
                 download_name=file_name,
                 mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             )
+            
+            # Add additional headers for better download handling
+            response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+            response.headers['Pragma'] = 'no-cache'
+            response.headers['Expires'] = '0'
+            response.headers['Access-Control-Expose-Headers'] = 'Content-Disposition'
+            
+            return response
 
         except Exception as e:
             logger.error(f"Error downloading document: {e}", exc_info=True)

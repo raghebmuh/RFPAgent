@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import CopyButton from './CopyButton';
 import { useSelector } from 'react-redux';
 import { selectStatus } from '../conversation/conversationSlice';
+import { selectToken } from '../preferences/preferenceSlice';
 import { useDarkTheme } from '../hooks';
 import { DocumentRendererProps } from './types';
 
@@ -16,6 +17,7 @@ const DocumentRenderer: React.FC<DocumentRendererProps> = ({
 }) => {
   const [isDarkTheme] = useDarkTheme();
   const status = useSelector(selectStatus);
+  const token = useSelector(selectToken);
   const [showDownloadMenu, setShowDownloadMenu] = useState<boolean>(false);
   const [showPreview, setShowPreview] = useState<boolean>(true);
   const downloadMenuRef = useRef<HTMLDivElement>(null);
@@ -29,32 +31,102 @@ const DocumentRenderer: React.FC<DocumentRendererProps> = ({
 
   const downloadDocx = async (): Promise<void> => {
     try {
-      const response = await fetch(
-        `${import.meta.env.VITE_API_HOST}/api/documents/download/${docId}`,
-        {
+      // console.log('Attempting to download document:', docId);
+      // console.log('API Host:', import.meta.env.VITE_API_HOST);
+      // console.log('Token present:', !!token);
+      // console.log('Token value:', token);
+      // console.log('LocalStorage authToken:', localStorage.getItem('authToken'));
+
+      const downloadUrl = `${import.meta.env.VITE_API_HOST}/api/documents/download/${docId}`;
+
+      // Try the fetch approach first
+      try {
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+        };
+
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+
+        const response = await fetch(downloadUrl, {
           method: 'GET',
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`,
-          },
-        },
-      );
+          headers,
+        });
 
-      if (!response.ok) {
-        throw new Error('Download failed');
+        // console.log('Response status:', response.status);
+        // console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(
+            'Download failed:',
+            response.status,
+            response.statusText,
+            errorText,
+          );
+          throw new Error(
+            `Download failed: ${response.status} ${response.statusText}`,
+          );
+        }
+
+        // Handle the blob response more carefully
+        const blob = await response.blob();
+        console.log('Blob created successfully, size:', blob.size);
+
+        // Create download URL
+        const url = window.URL.createObjectURL(blob);
+        console.log('Object URL created:', url);
+
+        // Create download link
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${title.replace(/[^a-z0-9]/gi, '_')}.docx`;
+        link.style.display = 'none';
+
+        // Add to DOM, trigger download, and clean up
+        document.body.appendChild(link);
+
+        try {
+          link.click();
+          console.log('Download link clicked successfully');
+        } catch (clickError) {
+          console.error('Error clicking download link:', clickError);
+          throw clickError;
+        }
+
+        // Clean up after a short delay to ensure download starts
+        setTimeout(() => {
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(url);
+          console.log('Download cleanup completed');
+        }, 1000);
+
+        console.log('Download completed successfully');
+        return;
+      } catch (fetchError) {
+        console.error('Fetch approach failed:', fetchError);
+        console.log('Trying direct link approach as fallback...');
+
+        // Fallback: Direct link approach
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = `${title.replace(/[^a-z0-9]/gi, '_')}.docx`;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.style.display = 'none';
+
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        console.log('Direct link download attempted');
       }
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${title.replace(/[^a-z0-9]/gi, '_')}.docx`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Error downloading document:', error);
-      alert('Failed to download document. Please try again.');
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error occurred';
+      alert(`Failed to download document: ${errorMessage}`);
     }
   };
 
