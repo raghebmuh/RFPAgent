@@ -363,7 +363,10 @@ class GenerateRFPDocument(Resource):
             output_dir = os.path.join("outputs", "rfp_documents", user)
             os.makedirs(output_dir, exist_ok=True)
 
-            file_name = f"RFP_{data['project_name'][:20].replace(' ', '_')}_{timestamp}.docx"
+            # Create file name with format: RFP_<project_name>_<doc_id>_<timestamp>.docx
+            # Remove spaces and special characters from project name for filename
+            project_name_clean = data['project_name'].replace(' ', '_').replace('/', '_').replace('\\', '_')
+            file_name = f"RFP_{project_name_clean}_{doc_id}_{timestamp}.docx"
             output_path = os.path.join(output_dir, file_name)
 
             # Generate the document

@@ -185,7 +185,7 @@ class DocxFillerService:
 
     def _replace_paragraph_text(self, paragraph: Paragraph, old_text: str, new_text: str):
         """
-        Replace text in a paragraph while preserving formatting
+        Replace text in a paragraph while preserving ALL formatting properties
         """
         # Check if we need Arabic text reshaping
         if self._is_arabic(new_text):
@@ -196,20 +196,42 @@ class DocxFillerService:
         # Simple approach: Replace in the paragraph text directly
         # This preserves basic formatting but might lose complex run-level formatting
         if old_text in paragraph.text:
-            # Store the alignment
+            # Store the paragraph formatting
             original_alignment = paragraph.alignment
+            original_paragraph_format = {
+                'space_before': paragraph.paragraph_format.space_before,
+                'space_after': paragraph.paragraph_format.space_after,
+                'line_spacing': paragraph.paragraph_format.line_spacing,
+                'left_indent': paragraph.paragraph_format.left_indent,
+                'right_indent': paragraph.paragraph_format.right_indent,
+                'first_line_indent': paragraph.paragraph_format.first_line_indent,
+            }
 
-            # Get all runs and their properties
+            # Get all runs and their properties (including extended properties)
             runs_data = []
             for run in paragraph.runs:
-                runs_data.append({
+                run_properties = {
                     'text': run.text,
                     'bold': run.bold,
                     'italic': run.italic,
                     'underline': run.underline,
                     'font_name': run.font.name,
-                    'font_size': run.font.size
-                })
+                    'font_size': run.font.size,
+                    'font_color': None,
+                    'highlight_color': run.font.highlight_color,
+                    'strike': run.font.strike,
+                    'all_caps': run.font.all_caps,
+                    'small_caps': run.font.small_caps,
+                    'double_strike': run.font.double_strike,
+                    'subscript': run.font.subscript,
+                    'superscript': run.font.superscript,
+                }
+
+                # Get font color if available
+                if run.font.color and run.font.color.rgb:
+                    run_properties['font_color'] = run.font.color.rgb
+
+                runs_data.append(run_properties)
 
             # Combine text from all runs
             full_text = ''.join(run['text'] for run in runs_data)
@@ -227,26 +249,56 @@ class DocxFillerService:
                 run = paragraph.runs[0] if paragraph.runs else paragraph.add_run()
                 run.text = new_full_text
 
-                # Apply formatting from original first run
-                if runs_data[0]['bold'] is not None:
-                    run.bold = runs_data[0]['bold']
-                if runs_data[0]['italic'] is not None:
-                    run.italic = runs_data[0]['italic']
-                if runs_data[0]['underline'] is not None:
-                    run.underline = runs_data[0]['underline']
-                if runs_data[0]['font_name']:
-                    run.font.name = runs_data[0]['font_name']
-                if runs_data[0]['font_size']:
-                    run.font.size = runs_data[0]['font_size']
+                # Apply ALL formatting from original first run
+                template_run = runs_data[0]
+
+                if template_run['bold'] is not None:
+                    run.bold = template_run['bold']
+                if template_run['italic'] is not None:
+                    run.italic = template_run['italic']
+                if template_run['underline'] is not None:
+                    run.underline = template_run['underline']
+                if template_run['font_name']:
+                    run.font.name = template_run['font_name']
+                if template_run['font_size']:
+                    run.font.size = template_run['font_size']
+                if template_run['font_color']:
+                    run.font.color.rgb = template_run['font_color']
+                if template_run['highlight_color']:
+                    run.font.highlight_color = template_run['highlight_color']
+                if template_run['strike'] is not None:
+                    run.font.strike = template_run['strike']
+                if template_run['all_caps'] is not None:
+                    run.font.all_caps = template_run['all_caps']
+                if template_run['small_caps'] is not None:
+                    run.font.small_caps = template_run['small_caps']
+                if template_run['double_strike'] is not None:
+                    run.font.double_strike = template_run['double_strike']
+                if template_run['subscript'] is not None:
+                    run.font.subscript = template_run['subscript']
+                if template_run['superscript'] is not None:
+                    run.font.superscript = template_run['superscript']
             else:
                 paragraph.text = new_full_text
 
-            # Restore alignment
+            # Restore paragraph formatting
             if original_alignment:
                 paragraph.alignment = original_alignment
+            if original_paragraph_format['space_before']:
+                paragraph.paragraph_format.space_before = original_paragraph_format['space_before']
+            if original_paragraph_format['space_after']:
+                paragraph.paragraph_format.space_after = original_paragraph_format['space_after']
+            if original_paragraph_format['line_spacing']:
+                paragraph.paragraph_format.line_spacing = original_paragraph_format['line_spacing']
+            if original_paragraph_format['left_indent']:
+                paragraph.paragraph_format.left_indent = original_paragraph_format['left_indent']
+            if original_paragraph_format['right_indent']:
+                paragraph.paragraph_format.right_indent = original_paragraph_format['right_indent']
+            if original_paragraph_format['first_line_indent']:
+                paragraph.paragraph_format.first_line_indent = original_paragraph_format['first_line_indent']
 
-            # Set RTL for Arabic text
-            if self._is_arabic(new_text):
+            # Set RTL for Arabic text (but don't override if already set)
+            if self._is_arabic(new_text) and not original_alignment:
                 paragraph.alignment = WD_ALIGN_PARAGRAPH.RIGHT
 
     def _get_dropdown_replacement(self, text: str, data: Dict[str, Any]) -> str:
