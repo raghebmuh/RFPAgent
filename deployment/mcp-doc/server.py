@@ -42,6 +42,168 @@ active_documents: Dict[str, Document] = {}
 document_metadata: Dict[str, dict] = {}
 
 
+def replace_placeholder_in_paragraph(paragraph, placeholder_pattern: str, replacement_value: str):
+    """
+    Replace placeholder in paragraph while preserving ALL formatting, RTL, and Arabic font.
+
+    Args:
+        paragraph: The docx paragraph object
+        placeholder_pattern: The placeholder to find (e.g., "{{tender_name}}")
+        replacement_value: The value to replace it with
+
+    Returns:
+        bool: True if replacement was made, False otherwise
+    """
+    # Check if placeholder exists in full paragraph text
+    full_text = paragraph.text
+    if placeholder_pattern not in full_text:
+        return False
+
+    # Replace the placeholder in the full text
+    new_text = full_text.replace(placeholder_pattern, replacement_value)
+
+    # Store the formatting properties of the first run
+    if paragraph.runs:
+        first_run = paragraph.runs[0]
+
+        # Capture all formatting properties
+        font_name = first_run.font.name
+        font_size = first_run.font.size
+        font_bold = first_run.font.bold
+        font_italic = first_run.font.italic
+        font_underline = first_run.font.underline
+        font_color = first_run.font.color.rgb if first_run.font.color.rgb else None
+
+        # Capture complex script font (for Arabic)
+        cs_font = None
+        if first_run._element.rPr is not None:
+            rFonts = first_run._element.rPr.rFonts
+            if rFonts is not None:
+                cs_font = rFonts.get(qn('w:cs'))
+
+        # Clear all runs
+        for run in paragraph.runs:
+            run.text = ""
+
+        # Set the new text in the first run
+        first_run.text = new_text
+
+        # Restore all formatting
+        if font_name:
+            first_run.font.name = font_name
+        if font_size:
+            first_run.font.size = font_size
+        if font_bold is not None:
+            first_run.font.bold = font_bold
+        if font_italic is not None:
+            first_run.font.italic = font_italic
+        if font_underline is not None:
+            first_run.font.underline = font_underline
+        if font_color:
+            first_run.font.color.rgb = font_color
+
+        # Restore complex script font for Arabic
+        if cs_font or font_name:
+            if first_run._element.rPr is None:
+                first_run._element.get_or_add_rPr()
+            rFonts = first_run._element.rPr.get_or_add_rFonts()
+            rFonts.set(qn('w:cs'), cs_font or font_name or 'Sakkal Majalla')
+            rFonts.set(qn('w:ascii'), font_name or 'Sakkal Majalla')
+            rFonts.set(qn('w:hAnsi'), font_name or 'Sakkal Majalla')
+    else:
+        # No runs existed, add the text directly
+        paragraph.text = new_text
+
+    return True
+
+
+def replace_placeholder_with_formatted_content(paragraph, placeholder_pattern: str, replacement_value: str, doc: Document):
+    """
+    Replace placeholder with multi-paragraph content while preserving formatting.
+    For multi-line content, this creates additional paragraphs after the current one.
+
+    Args:
+        paragraph: The docx paragraph object
+        placeholder_pattern: The placeholder to find
+        replacement_value: The value to replace (can contain newlines)
+        doc: The document object to add new paragraphs
+
+    Returns:
+        bool: True if replacement was made
+    """
+    full_text = paragraph.text
+    if placeholder_pattern not in full_text:
+        return False
+
+    # Check if this is multi-line content
+    lines = replacement_value.split('\n')
+
+    if len(lines) == 1:
+        # Single line - use simple replacement
+        return replace_placeholder_in_paragraph(paragraph, placeholder_pattern, replacement_value)
+
+    # Multi-line content - replace first line and add subsequent lines as new paragraphs
+    # Replace with first line
+    first_line = lines[0]
+    replace_placeholder_in_paragraph(paragraph, placeholder_pattern, first_line)
+
+    # Capture formatting from the original paragraph
+    if paragraph.runs:
+        original_run = paragraph.runs[0]
+        font_name = original_run.font.name
+        font_size = original_run.font.size
+        font_bold = original_run.font.bold
+        cs_font = None
+        if original_run._element.rPr is not None:
+            rFonts = original_run._element.rPr.rFonts
+            if rFonts is not None:
+                cs_font = rFonts.get(qn('w:cs'))
+    else:
+        font_name = 'Sakkal Majalla'
+        font_size = Pt(16)
+        font_bold = False
+        cs_font = 'Sakkal Majalla'
+
+    # Get paragraph's parent element to insert after current paragraph
+    parent = paragraph._element.getparent()
+    paragraph_index = parent.index(paragraph._element)
+
+    # Add remaining lines as new paragraphs right after current one
+    for i, line in enumerate(lines[1:], 1):
+        if not line.strip():
+            continue
+
+        # Create new paragraph element
+        new_p = OxmlElement('w:p')
+        parent.insert(paragraph_index + i, new_p)
+
+        # Create paragraph object from element
+        new_para = Paragraph(new_p, paragraph._parent)
+
+        # Add run with text
+        run = new_para.add_run(line)
+
+        # Apply formatting
+        if font_name:
+            run.font.name = font_name
+        if font_size:
+            run.font.size = font_size
+        if font_bold is not None:
+            run.font.bold = font_bold
+
+        # Apply Arabic font
+        if run._element.rPr is None:
+            run._element.get_or_add_rPr()
+        rFonts = run._element.rPr.get_or_add_rFonts()
+        rFonts.set(qn('w:cs'), cs_font or font_name or 'Sakkal Majalla')
+        rFonts.set(qn('w:ascii'), font_name or 'Sakkal Majalla')
+
+        # Set RTL
+        set_rtl_paragraph(new_para)
+
+    return True
+
+
 def set_rtl_paragraph(paragraph):
     """Set paragraph direction to RTL (Right-to-Left) for Arabic text."""
     pPr = paragraph._element.get_or_add_pPr()
@@ -113,9 +275,10 @@ def create_rfp_document(
     }
 
     # AUTO-SAVE: Save document to disk immediately after creation
-    safe_title = "".join(c if c.isalnum() or c in (' ', '-', '_') else '_' for c in title)
-    safe_title = safe_title.replace(' ', '_')
-    file_name = f"{safe_title}_{doc_id[:8]}.docx"
+    safe_title = "".join(c if c.isalnum() or c in (' ', '-', '_', 'ا', 'ب', 'ت', 'ث', 'ج', 'ح', 'خ', 'د', 'ذ', 'ر', 'ز', 'س', 'ش', 'ص', 'ض', 'ط', 'ظ', 'ع', 'غ', 'ف', 'ق', 'ك', 'ل', 'م', 'ن', 'ه', 'و', 'ي') else '_' for c in title)
+    safe_title = safe_title.replace(' ', '_')[:50]
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    file_name = f"RFP_{safe_title}_{doc_id[:8]}_{timestamp}.docx"
     file_path = DOCUMENTS_DIR / file_name
     doc.save(str(file_path))
 
@@ -265,10 +428,11 @@ def create_rfp_from_template(
             "sections": sections[:50]  # Limit to first 50 sections
         }
 
-        # AUTO-SAVE: Save document to disk immediately
-        safe_title = "".join(c if c.isalnum() or c in (' ', '-', '_') else '_' for c in title)
-        safe_title = safe_title.replace(' ', '_')
-        file_name = f"{safe_title}_{doc_id[:8]}.docx"
+        # AUTO-SAVE: Save document to disk immediately with Arabic naming format
+        safe_title = "".join(c if c.isalnum() or c in (' ', '-', '_', 'ا', 'ب', 'ت', 'ث', 'ج', 'ح', 'خ', 'د', 'ذ', 'ر', 'ز', 'س', 'ش', 'ص', 'ض', 'ط', 'ظ', 'ع', 'غ', 'ف', 'ق', 'ك', 'ل', 'م', 'ن', 'ه', 'و', 'ي') else '_' for c in title)
+        safe_title = safe_title.replace(' ', '_')[:50]
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        file_name = f"RFP_{safe_title}_{doc_id[:8]}_{timestamp}.docx"
         file_path = DOCUMENTS_DIR / file_name
         doc.save(str(file_path))
 
@@ -353,50 +517,90 @@ def create_arabic_rfp_document(
         core_properties.subject = f"كراسة الشروط والمواصفات - {tender_name}"
         core_properties.author = technical_organization_name or "RFPAgent"
 
-        # Replace placeholders in paragraphs
-        for paragraph in doc.paragraphs:
-            for placeholder_name, value in placeholders.items():
-                placeholder_pattern = f"{{{placeholder_name}}}"
-                if placeholder_pattern in paragraph.text:
-                    # Replace placeholder in each run
-                    for run in paragraph.runs:
-                        if placeholder_pattern in run.text:
-                            run.text = run.text.replace(placeholder_pattern, str(value))
+        # Define ALL expected placeholders with defaults
+        all_expected_placeholders = {
+            "tender_name": tender_name,
+            "tender_number": tender_number or "يرجى تحديد رقم المنافسة",
+            "technical_organization_name": technical_organization_name or "الجهة الحكومية",
+            "tender_purpose": "سيتم تحديده",
+            "tender_documents_fees": "سيتم تحديده",
+            "definition_department": "الإدارة المختصة",
+            "project_scope": "سيتم تحديد نطاق العمل",
+            "work_execution_method": "سيتم تحديد طريقة تنفيذ الأعمال",
+            "work_program_phases": "سيتم تحديد مراحل البرنامج الزمني",
+            "work_program_payment_method": "سيتم تحديد طريقة الدفع",
+            "technical_inquiries_entity_name": technical_organization_name or "الجهة المختصة",
+            "technical_inquiries_email": "inquiries@example.gov.sa",
+            "technical_inquiries_alt_email": "سيتم تحديده",
+            "technical_inquiries_duration": "5 أيام عمل",
+            "bids_review_proposals": "سيتم تحديد معايير المراجعة",
+            "purchase_reference": "سيتم تحديده",
+            "supplier_samples_delivery_address": "سيتم تحديده",
+            "samples_delivery_building": "سيتم تحديده",
+            "samples_delivery_floor": "سيتم تحديده",
+            "samples_delivery_room_or_department": "سيتم تحديده",
+            "samples_delivery_time": "خلال ساعات العمل الرسمية"
+        }
 
-        # Replace placeholders in tables
+        # Merge user-provided placeholders with defaults
+        final_placeholders = {**all_expected_placeholders, **placeholders}
+
+        # Log placeholder summary
+        logger.info(f"Starting placeholder replacement - Total: {len(final_placeholders)} placeholders")
+        logger.info(f"User-provided: {len(placeholders)}, Using defaults: {len(all_expected_placeholders) - len(placeholders)}")
+
+        # Replace placeholders in paragraphs (using {{placeholder}} format)
+        replacements_made = 0
+        for paragraph in doc.paragraphs:
+            for placeholder_name, value in final_placeholders.items():
+                placeholder_pattern = "{{" + placeholder_name + "}}"
+                if replace_placeholder_in_paragraph(paragraph, placeholder_pattern, str(value)):
+                    replacements_made += 1
+                    logger.info(f"✓ Replaced {placeholder_pattern} with: {str(value)[:50]}...")
+
+        logger.info(f"Replaced {replacements_made} placeholders in paragraphs")
+
+        # Replace placeholders in tables (using {{placeholder}} format)
+        table_replacements = 0
         for table in doc.tables:
             for row in table.rows:
                 for cell in row.cells:
                     for paragraph in cell.paragraphs:
-                        for placeholder_name, value in placeholders.items():
-                            placeholder_pattern = f"{{{placeholder_name}}}"
-                            if placeholder_pattern in paragraph.text:
-                                for run in paragraph.runs:
-                                    if placeholder_pattern in run.text:
-                                        run.text = run.text.replace(placeholder_pattern, str(value))
+                        for placeholder_name, value in final_placeholders.items():
+                            placeholder_pattern = "{{" + placeholder_name + "}}"
+                            if replace_placeholder_in_paragraph(paragraph, placeholder_pattern, str(value)):
+                                table_replacements += 1
+                                logger.info(f"✓ Replaced {placeholder_pattern} in table cell")
 
-        # Replace placeholders in headers and footers
+        logger.info(f"Replaced {table_replacements} placeholders in tables")
+
+        # Replace placeholders in headers and footers (using {{placeholder}} format)
+        header_footer_replacements = 0
         for section in doc.sections:
             # Header
             for paragraph in section.header.paragraphs:
-                for placeholder_name, value in placeholders.items():
-                    placeholder_pattern = f"{{{placeholder_name}}}"
-                    if placeholder_pattern in paragraph.text:
-                        for run in paragraph.runs:
-                            if placeholder_pattern in run.text:
-                                run.text = run.text.replace(placeholder_pattern, str(value))
+                for placeholder_name, value in final_placeholders.items():
+                    placeholder_pattern = "{{" + placeholder_name + "}}"
+                    if replace_placeholder_in_paragraph(paragraph, placeholder_pattern, str(value)):
+                        header_footer_replacements += 1
+                        logger.info(f"✓ Replaced {placeholder_pattern} in header")
 
             # Footer
             for paragraph in section.footer.paragraphs:
-                for placeholder_name, value in placeholders.items():
-                    placeholder_pattern = f"{{{placeholder_name}}}"
-                    if placeholder_pattern in paragraph.text:
-                        for run in paragraph.runs:
-                            if placeholder_pattern in run.text:
-                                run.text = run.text.replace(placeholder_pattern, str(value))
+                for placeholder_name, value in final_placeholders.items():
+                    placeholder_pattern = "{{" + placeholder_name + "}}"
+                    if replace_placeholder_in_paragraph(paragraph, placeholder_pattern, str(value)):
+                        header_footer_replacements += 1
+                        logger.info(f"✓ Replaced {placeholder_pattern} in footer")
 
-        # Generate safe filename with doc_id for easy lookup
-        safe_tender_name = "".join(c if c.isalnum() or c in (' ', '-', '_') else '_' for c in tender_name)
+        logger.info(f"Replaced {header_footer_replacements} placeholders in headers/footers")
+
+        total_replacements = replacements_made + table_replacements + header_footer_replacements
+        logger.info(f"✅ TOTAL REPLACEMENTS: {total_replacements} placeholders replaced successfully")
+        logger.info(f"📝 All {len(final_placeholders)} expected placeholders have been processed")
+
+        # Generate safe filename with doc_id for easy lookup (Arabic support)
+        safe_tender_name = "".join(c if c.isalnum() or c in (' ', '-', '_', 'ا', 'ب', 'ت', 'ث', 'ج', 'ح', 'خ', 'د', 'ذ', 'ر', 'ز', 'س', 'ش', 'ص', 'ض', 'ط', 'ظ', 'ع', 'غ', 'ف', 'ق', 'ك', 'ل', 'م', 'ن', 'ه', 'و', 'ي') else '_' for c in tender_name)
         safe_tender_name = safe_tender_name.replace(' ', '_')[:50]
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         # Include first 8 chars of doc_id in filename for download lookup
@@ -596,11 +800,14 @@ def save_document(doc_id: str) -> dict:
     doc = active_documents[doc_id]
     metadata = document_metadata.get(doc_id, {})
 
-    # Generate filename
-    title = metadata.get("title", "rfp_document")
-    safe_title = "".join(c if c.isalnum() or c in (' ', '-', '_') else '_' for c in title)
-    safe_title = safe_title.replace(' ', '_')
-    file_name = f"{safe_title}_{doc_id[:8]}.docx"
+    # Generate filename using tender_name from metadata (Arabic support)
+    tender_name = metadata.get("tender_name", metadata.get("project_name", "مشروع"))
+    safe_tender_name = "".join(c if c.isalnum() or c in (' ', '-', '_', 'ا', 'ب', 'ت', 'ث', 'ج', 'ح', 'خ', 'د', 'ذ', 'ر', 'ز', 'س', 'ش', 'ص', 'ض', 'ط', 'ظ', 'ع', 'غ', 'ف', 'ق', 'ك', 'ل', 'م', 'ن', 'ه', 'و', 'ي') else '_' for c in tender_name)
+    safe_tender_name = safe_tender_name.replace(' ', '_')[:50]
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    # Use standard naming format: RFP_{tender_name}_{doc_id}_{timestamp}.docx
+    file_name = f"RFP_{safe_tender_name}_{doc_id[:8]}_{timestamp}.docx"
     file_path = DOCUMENTS_DIR / file_name
 
     # Save document
